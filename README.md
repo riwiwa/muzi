@@ -2,6 +2,9 @@
 
 Self hosted music listening statistics
 
+### Dependencies:
+- cJSON (https://github.com/DaveGamble/cJSON)
+
 ### plans:
 - Ability to import all listening statistics and scrobbles from lastfm, spotify, apple music
 - daily, weekly, monthly, yearly, lifetime presets for listening reports
