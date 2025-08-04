@@ -1,11 +1,11 @@
+#include <cjson/cJSON.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <zip.h>
-#include <cjson/cJSON.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <zip.h>
 
 // TODO:
 // - unzip a given .zip archive of spotify data to a directory
@@ -23,8 +23,10 @@ int extract(const char *path);
 int get_artist_plays(void);
 
 int get_artist_plays(void) {
-  FILE *fp = fopen("/home/r/dl/spotify-data/rm35@gm - Spotify Extended Streaming History/Streaming_History_Audio_2020-2021_4.json", "r");
-  if(fp == NULL) {
+  FILE *fp = fopen("/home/r/dl/spotify-data/rm35@gm - Spotify Extended "
+                   "Streaming History/Streaming_History_Audio_2020-2021_4.json",
+                   "r");
+  if (fp == NULL) {
     printf("Error while opening file\n");
     return 1;
   }
@@ -39,7 +41,7 @@ int get_artist_plays(void) {
   fclose(fp);
 
   cJSON *json = cJSON_Parse(buffer);
-  if(json == NULL) {
+  if (json == NULL) {
     const char *error_ptr = cJSON_GetErrorPtr();
     if (error_ptr != NULL) {
       printf("Error: %s\n", error_ptr);
@@ -53,15 +55,15 @@ int get_artist_plays(void) {
   int i = 0;
   char artist[] = "";
   cJSON_ArrayForEach(track, json) {
-    cJSON *trackName = cJSON_GetObjectItemCaseSensitive(track, "master_metadata_album_artist_name");
-    if(cJSON_IsString(trackName)) {
-      if(strcasecmp(artist, (trackName->valuestring)) == 0) {
+    cJSON *trackName = cJSON_GetObjectItemCaseSensitive(
+        track, "master_metadata_album_artist_name");
+    if (cJSON_IsString(trackName)) {
+      if (strcasecmp(artist, (trackName->valuestring)) == 0) {
         i++;
-      } 
+      }
     }
   }
   printf("\"%s\" count: %d\n", artist, i);
-
 
   cJSON_Delete(json);
   free(buffer);
@@ -71,10 +73,11 @@ int get_artist_plays(void) {
 int extract(const char *path) {
   zip_t *za;
   int err;
-  if((za = zip_open(path, 0, &err)) == NULL) {
+  if ((za = zip_open(path, 0, &err)) == NULL) {
     zip_error_t error;
     zip_error_init_with_code(&error, err);
-    fprintf(stderr, "Error opening zip archive: %s\n", zip_error_strerror(&error));
+    fprintf(stderr, "Error opening zip archive: %s\n",
+            zip_error_strerror(&error));
     zip_error_fini(&error);
     return 1;
   }
@@ -123,6 +126,4 @@ int extract(const char *path) {
   return 0;
 }
 
-int main(void) {
-  extract("archive.zip");
-}
+int main(void) { extract("archive.zip"); }
