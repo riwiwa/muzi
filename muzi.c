@@ -8,7 +8,8 @@
 #include <zip.h>
 
 // TODO:
-// - unzip a given .zip archive of spotify data to a directory
+// - unzip a given .zip archive of spotify data to a directory WITHOUT ROOT
+// PERMS
 // - for each json file in the directory {
 //  - for each json entry {
 //    - add entry to postgresql db
@@ -91,10 +92,18 @@ int extract(const char *path) {
       continue;
     }
 
-    // Handle directories
-    if (st.name[strlen(st.name) - 1] == '/') {
-      mkdir(st.name, 0755); // Create directory if it doesn't exist
-      continue;
+    // Create directories from zip file
+    char *search = strchr(st.name, '/');
+    if (search != NULL) {
+      int index = search - st.name;
+      int end = 0;
+      char dir[strlen(st.name)];
+      for (int j = 0; j < index; j++) {
+        dir[j] = st.name[j];
+        end = j;
+      }
+      dir[end + 1] = '\0';
+      mkdir(dir, 0777);
     }
 
     // Open file in archive
@@ -126,4 +135,4 @@ int extract(const char *path) {
   return 0;
 }
 
-int main(void) { extract("archive.zip"); }
+int main(void) { extract("./rileyman35@gmail.com-my_spotify_data.zip"); }
