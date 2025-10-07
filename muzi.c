@@ -1,4 +1,6 @@
 #include <cjson/cJSON.h>
+#include <dirent.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,9 +9,9 @@
 #include <sys/types.h>
 #include <zip.h>
 
+#define MAX_FILENAME_SIZE 255
+
 // TODO:
-// - unzip a given .zip archive of spotify data to a directory WITHOUT ROOT
-// PERMS
 // - for each json file in the directory {
 //  - for each json entry {
 //    - add entry to postgresql db
@@ -20,8 +22,9 @@
 // - sql tables: "full history", "artists", "songs", "albums" (see ipad)
 //
 
-int extract(const char *path);
+int extract(const char *path, const char *target);
 int get_artist_plays(void);
+int import_spotify(void);
 
 int get_artist_plays(void) {
   FILE *fp = fopen("/home/r/dl/spotify-data/rm35@gm - Spotify Extended "
@@ -71,7 +74,8 @@ int get_artist_plays(void) {
   return 0;
 }
 
-int extract(const char *path) {
+int extract(const char *path, const char *target) {
+  mkdir(target, 0777);
   zip_t *za;
   int err;
   if ((za = zip_open(path, 0, &err)) == NULL) {
@@ -92,7 +96,9 @@ int extract(const char *path) {
       continue;
     }
 
-    // Create directories from zip file
+    char file_target[MAX_FILENAME_SIZE];
+    snprintf(file_target, MAX_FILENAME_SIZE, "%s/%s", target, st.name);
+
     char *search = strchr(st.name, '/');
     if (search != NULL) {
       int index = search - st.name;
@@ -103,20 +109,28 @@ int extract(const char *path) {
         end = j;
       }
       dir[end + 1] = '\0';
-      mkdir(dir, 0777);
+      char dir_target[MAX_FILENAME_SIZE];
+      snprintf(dir_target, MAX_FILENAME_SIZE, "%s/%s", target, dir);
+      mkdir(dir_target, 0777);
+    }
+
+    // Handle directories
+    if (file_target[strlen(file_target) - 1] == '/') {
+      mkdir(file_target, 0777); // Create directory if it doesn't exist
+      continue;
     }
 
     // Open file in archive
     zip_file_t *zf = zip_fopen_index(za, i, 0);
     if (!zf) {
-      fprintf(stderr, "Error opening file in zip: %s\n", st.name);
+      fprintf(stderr, "Error opening file in zip: %s\n", file_target);
       continue;
     }
 
     // Create output file
-    FILE *outfile = fopen(st.name, "w+");
+    FILE *outfile = fopen(file_target, "w+");
     if (!outfile) {
-      fprintf(stderr, "Error creating output file: %s\n", st.name);
+      fprintf(stderr, "Error creating output file: %s\n", file_target);
       zip_fclose(zf);
       continue;
     }
@@ -135,4 +149,34 @@ int extract(const char *path) {
   return 0;
 }
 
-int main(void) { extract("./rileyman35@gmail.com-my_spotify_data.zip"); }
+int import_spotify(void) {
+  const char *path = "./spotify-data/zip";
+  const char *target_base = "./spotify-data/extracted";
+  DIR *dir = opendir(path);
+  if (dir == NULL) {
+    fprintf(stderr, "Error opening directory: %s (%d)\n", path, errno);
+    return errno;
+  }
+  struct dirent *entry = NULL;
+  while ((entry = readdir(dir)) != NULL) {
+    char full_name[MAX_FILENAME_SIZE];
+    snprintf(full_name, MAX_FILENAME_SIZE, "%s/%s", path, entry->d_name);
+
+    if (entry->d_type != DT_DIR) {
+      char *ext = strrchr(entry->d_name, '.');
+      if (strcmp(ext, ".zip") == 0) {
+        char *zip_dir_name = entry->d_name;
+        int len = strlen(zip_dir_name);
+        zip_dir_name[len - 4] = '\0';
+        char target[MAX_FILENAME_SIZE];
+        snprintf(target, MAX_FILENAME_SIZE, "%s/%s", target_base, zip_dir_name);
+        extract(full_name, target);
+      }
+    }
+  }
+
+  closedir(dir);
+  return 0;
+}
+
+int main(void) { import_spotify(); }
