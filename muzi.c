@@ -27,9 +27,7 @@ int get_artist_plays(void);
 int import_spotify(void);
 
 int get_artist_plays(void) {
-  FILE *fp = fopen("/home/r/dl/spotify-data/rm35@gm - Spotify Extended "
-                   "Streaming History/Streaming_History_Audio_2020-2021_4.json",
-                   "r");
+  FILE *fp = fopen("test.json", "r");
   if (fp == NULL) {
     printf("Error while opening file\n");
     return 1;
