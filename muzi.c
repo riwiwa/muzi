@@ -30,8 +30,7 @@ int add_to_db(const char *json_file) {
   // for json_entry in json_file {
   //  add to database
   // }
-  printf("Adding to database: %s\n", json_file);
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 int add_dir_to_db(const char *path) {
@@ -46,7 +45,7 @@ int add_dir_to_db(const char *path) {
         if (snprintf(data_dir_path, MAX_FILENAME_SIZE, "%s/%s/%s", path,
                      data_dir->d_name,
                      "Spotify Extended Streaming History") < 0) {
-          return 1;
+          return EXIT_FAILURE;
         }
 
         DIR *json_dir = opendir(data_dir_path);
@@ -58,7 +57,7 @@ int add_dir_to_db(const char *path) {
               char json_file_path[MAX_FILENAME_SIZE];
               if (snprintf(json_file_path, MAX_FILENAME_SIZE, "%s/%s",
                            data_dir_path, json_file->d_name) < 0) {
-                return 1;
+                return EXIT_FAILURE;
               }
 
               add_to_db(json_file_path);
@@ -68,7 +67,7 @@ int add_dir_to_db(const char *path) {
       }
     }
   }
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 int get_artist_plays(const char *json_file, const char *artist) {
@@ -95,7 +94,7 @@ int get_artist_plays(const char *json_file, const char *artist) {
     }
     cJSON_Delete(json);
     free(buffer);
-    return 1;
+    return EXIT_FAILURE;
   }
 
   cJSON *track = NULL;
@@ -113,7 +112,7 @@ int get_artist_plays(const char *json_file, const char *artist) {
 
   cJSON_Delete(json);
   free(buffer);
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 int extract(const char *path, const char *target) {
@@ -126,7 +125,7 @@ int extract(const char *path, const char *target) {
     fprintf(stderr, "Error opening zip archive: %s\n",
             zip_error_strerror(&error));
     zip_error_fini(&error);
-    return 1;
+    return EXIT_FAILURE;
   }
 
   int archived_files = zip_get_num_entries(za, ZIP_FL_UNCHANGED);
@@ -141,7 +140,7 @@ int extract(const char *path, const char *target) {
     char file_target[MAX_FILENAME_SIZE];
     if (snprintf(file_target, MAX_FILENAME_SIZE, "%s/%s", target, st.name) <
         0) {
-      return 1;
+      return EXIT_FAILURE;
     }
 
     char *search = strchr(st.name, '/');
@@ -156,7 +155,7 @@ int extract(const char *path, const char *target) {
       dir[end + 1] = '\0';
       char dir_target[MAX_FILENAME_SIZE];
       if (snprintf(dir_target, MAX_FILENAME_SIZE, "%s/%s", target, dir) < 0) {
-        return 1;
+        return EXIT_FAILURE;
       }
       mkdir(dir_target, 0777);
     }
@@ -188,7 +187,7 @@ int extract(const char *path, const char *target) {
     fclose(outfile);
     zip_fclose(zf);
   }
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 int import_spotify(void) {
@@ -204,7 +203,7 @@ int import_spotify(void) {
     char full_name[MAX_FILENAME_SIZE];
     if (snprintf(full_name, MAX_FILENAME_SIZE, "%s/%s", path, entry->d_name) <
         0) {
-      return 1;
+      return EXIT_FAILURE;
     }
 
     if (entry->d_type != DT_DIR) {
@@ -216,7 +215,7 @@ int import_spotify(void) {
         char target[MAX_FILENAME_SIZE];
         if (snprintf(target, MAX_FILENAME_SIZE, "%s/%s", target_base,
                      zip_dir_name) < 0) {
-          return 1;
+          return EXIT_FAILURE;
         }
         extract(full_name, target);
       }
@@ -225,10 +224,11 @@ int import_spotify(void) {
 
   closedir(dir);
   add_dir_to_db(target_base);
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 int main(void) {
   // import_spotify();
   // add_dir_to_db("./spotify-data/extracted");
+  return EXIT_SUCCESS;
 }
