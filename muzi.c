@@ -33,18 +33,21 @@ bool table_exists(const char *name, PGconn *conn);
 int create_table(const char *name, PGconn *conn);
 
 bool table_exists(const char *name, PGconn *conn) {
+  const char *paramValues[1] = {name};
+  Oid paramTypes[1] = {25};
   PGresult *result =
       PQexecParams(conn,
-                   "SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = "
-                   "'public' AND tablename = $1);",
-                   1, NULL, &name, NULL, NULL, 0);
+                   "SELECT EXISTS (SELECT 1 FROM pg_tables "
+                   "WHERE schemaname = 'public' AND tablename = $1);",
+                   1, paramTypes, paramValues, NULL, NULL, 0);
   if (PQresultStatus(result) != PGRES_TUPLES_OK) {
     printf("SELECT EXISTS failed: %s\n", PQerrorMessage(conn));
     PQclear(result);
     return false;
   }
+  bool exists = strcmp(PQgetvalue(result, 0, 0), "t") == 0;
   PQclear(result);
-  return (strcmp(PQgetvalue(result, 0, 0), "t") == 0);
+  return exists;
 }
 
 bool db_exists(void) {
@@ -110,17 +113,18 @@ int json_to_db(const char *json_file) {
 
   bool e = table_exists("history", conn);
   if (e) {
-    printf("history table exists\n");
   } else {
-    printf("history table doesn't exist\n");
-
-    PQexec(conn, "CREATE TABLE history ( date TEXT)");
-
-    e = table_exists("history", conn);
-    if (e) {
-      printf("history table exists\n");
-    } else {
-      printf("still doesn't exist!!\n");
+    printf("Creating history table.\n");
+    PGresult *result = PQexec(
+        conn,
+        "CREATE TABLE history ( id INT PRIMARY KEY GENERATED ALWAYS AS "
+        "IDENTITY, year INT, month INT, day INT, time VARCHAR(10), timestamp "
+        "VARCHAR(20), song_name VARCHAR(100), artist VARCHAR(100), "
+        "album_artist VARCHAR(100), album_name VARCHAR(100));");
+    if (PQresultStatus(result) != PGRES_COMMAND_OK) {
+      printf("History table creation failed: %s\n", PQerrorMessage(conn));
+      PQfinish(conn);
+      return EXIT_FAILURE;
     }
   }
 
@@ -329,6 +333,7 @@ int import_spotify(void) {
 int main(void) {
   // import_spotify();
   // add_dir_to_db("./spotify-data/extracted");
+  json_to_db("test");
 
   return EXIT_SUCCESS;
 }
