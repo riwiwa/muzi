@@ -33,13 +33,11 @@ bool table_exists(const char *name, PGconn *conn);
 int create_table(const char *name, PGconn *conn);
 
 bool table_exists(const char *name, PGconn *conn) {
-  const char *paramValues[1] = {name};
-  Oid paramTypes[1] = {25};
   PGresult *result =
       PQexecParams(conn,
                    "SELECT EXISTS (SELECT 1 FROM pg_tables "
                    "WHERE schemaname = 'public' AND tablename = $1);",
-                   1, paramTypes, paramValues, NULL, NULL, 0);
+                   1, NULL, &name, NULL, NULL, 0);
   if (PQresultStatus(result) != PGRES_TUPLES_OK) {
     printf("SELECT EXISTS failed: %s\n", PQerrorMessage(conn));
     PQclear(result);
@@ -333,7 +331,6 @@ int import_spotify(void) {
 int main(void) {
   // import_spotify();
   // add_dir_to_db("./spotify-data/extracted");
-  json_to_db("test");
 
   return EXIT_SUCCESS;
 }
