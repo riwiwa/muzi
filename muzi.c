@@ -13,20 +13,16 @@
 
 #define MAX_FILENAME_SIZE 255
 
-// TODO:
-//  - for each json entry {
-//    - add entry to postgresql db
-//  }
-//
-// - web ui
-// - sql tables: "full history", "artists", "songs", "albums" (see ipad)
-//
+enum Platform {
+  SPOTIFY = 0,
+  LASTFM = 1,
+};
 
 int extract(const char *path, const char *target);
 int get_artist_plays(const char *json_file, const char *artist);
 int import_spotify(void);
-int add_dir_to_db(const char *path);
-int json_to_db(const char *json_file);
+int add_dir_to_db(const char *path, int platform);
+int json_to_db(const char *json_file, int platform);
 int create_db(void);
 bool db_exists(void);
 bool table_exists(const char *name, PGconn *conn);
@@ -83,7 +79,6 @@ int create_db(void) {
     PQfinish(tmp_conn);
     return EXIT_FAILURE;
   }
-  printf("Database connection successful.\n");
   if (PQresultStatus(PQexec(tmp_conn, "CREATE DATABASE muzi")) !=
       PGRES_COMMAND_OK) {
     printf("CREATE DATABASE muzi failed: %s\n", PQerrorMessage(tmp_conn));
@@ -95,7 +90,7 @@ int create_db(void) {
   return EXIT_SUCCESS;
 }
 
-int json_to_db(const char *json_file) {
+int json_to_db(const char *json_file, int platform) {
   if (db_exists() == false) {
     create_db();
   }
@@ -107,34 +102,112 @@ int json_to_db(const char *json_file) {
     PQfinish(conn);
     return EXIT_FAILURE;
   }
-  printf("Database connection successful.\n");
 
   bool e = table_exists("history", conn);
-  if (e) {
-  } else {
-    printf("Creating history table.\n");
-    PGresult *result = PQexec(
-        conn,
-        "CREATE TABLE history ( id INT PRIMARY KEY GENERATED ALWAYS AS "
-        "IDENTITY, year INT, month INT, day INT, time VARCHAR(10), timestamp "
-        "VARCHAR(20), song_name VARCHAR(100), artist VARCHAR(100), "
-        "album_artist VARCHAR(100), album_name VARCHAR(100));");
+  if (!e) {
+    PGresult *result =
+        PQexec(conn, "CREATE TABLE history ( ms_played INTEGER, timestamp "
+                     "TIMESTAMPTZ, song_name "
+                     "TEXT, artist TEXT, "
+                     "album_name TEXT, PRIMARY KEY (timestamp, ms_played, "
+                     "artist, song_name));");
     if (PQresultStatus(result) != PGRES_COMMAND_OK) {
       printf("History table creation failed: %s\n", PQerrorMessage(conn));
+      PQclear(result);
       PQfinish(conn);
       return EXIT_FAILURE;
     }
+    printf("Created history table.\n");
+    PQclear(result);
   }
 
-  // for json_entry in json_file {
-  //  add to database
-  // }
+  FILE *fp = fopen(json_file, "r");
+  if (fp == NULL) {
+    printf("Error while opening file\n");
+    return 1;
+  }
+
+  fseek(fp, 0, SEEK_END);
+  long fileSize = ftell(fp);
+  fseek(fp, 0, SEEK_SET);
+
+  char *buffer = (char *)malloc(fileSize + 1);
+  fread(buffer, 1, fileSize, fp);
+  buffer[fileSize] = '\0';
+  fclose(fp);
+
+  cJSON *json = cJSON_Parse(buffer);
+  if (json == NULL) {
+    const char *error_ptr = cJSON_GetErrorPtr();
+    if (error_ptr != NULL) {
+      printf("Error: %s\n", error_ptr);
+    }
+    cJSON_Delete(json);
+    free(buffer);
+    return EXIT_FAILURE;
+  }
+
+  if (platform == SPOTIFY) {
+    cJSON *play = NULL;
+    cJSON_ArrayForEach(play, json) {
+      // supports up to 2.7k hour long songs
+      char ms_played[10];
+      char *timestamp;
+      char *song_name;
+      char *album_artist;
+      char *album;
+
+      cJSON *ms_played_obj =
+          cJSON_GetObjectItemCaseSensitive(play, "ms_played");
+      if (cJSON_IsNumber(ms_played_obj)) {
+        sprintf(ms_played, "%d", ms_played_obj->valueint);
+      }
+      // do not add to database if played for only 20 seconds
+      if (ms_played_obj->valueint < 20000) {
+        continue;
+      }
+      cJSON *timestamp_obj = cJSON_GetObjectItemCaseSensitive(play, "ts");
+      if (cJSON_IsString(timestamp_obj)) {
+        timestamp = timestamp_obj->valuestring;
+      }
+      cJSON *song_name_obj =
+          cJSON_GetObjectItemCaseSensitive(play, "master_metadata_track_name");
+      if (cJSON_IsString(song_name_obj)) {
+        song_name = song_name_obj->valuestring;
+      }
+      cJSON *artist_obj = cJSON_GetObjectItemCaseSensitive(
+          play, "master_metadata_album_artist_name");
+      if (cJSON_IsString(artist_obj)) {
+        album_artist = artist_obj->valuestring;
+      }
+      cJSON *album_obj = cJSON_GetObjectItemCaseSensitive(
+          play, "master_metadata_album_album_name");
+      if (cJSON_IsString(album_obj)) {
+        album = album_obj->valuestring;
+      }
+      const char *data[5] = {timestamp, song_name, album_artist, album,
+                             ms_played};
+      PGresult *result =
+          PQexecParams(conn,
+                       "INSERT INTO history (timestamp, song_name, artist, "
+                       "album_name, ms_played) VALUES ($1, $2, $3, $4, $5);",
+                       5, NULL, data, NULL, NULL, 0);
+      if (PQresultStatus(result) != PGRES_COMMAND_OK) {
+        printf("Attempt to insert data for track failed: %s\n",
+               PQerrorMessage(conn));
+      }
+      PQclear(result);
+    }
+  }
 
   PQfinish(conn);
+  cJSON_Delete(json);
+  free(buffer);
+  printf("Added file: '%s' to muzi database.\n", json_file);
   return EXIT_SUCCESS;
 }
 
-int add_dir_to_db(const char *path) {
+int add_dir_to_db(const char *path, int platform) {
   DIR *dir = opendir(path);
   struct dirent *data_dir = NULL;
 
@@ -155,13 +228,17 @@ int add_dir_to_db(const char *path) {
           if (json_file->d_type != DT_DIR) {
             char *ext = strrchr(json_file->d_name, '.');
             if (strcmp(ext, ".json") == 0) {
+              // prevents parsing spotify video data that causes duplicates
+              if (platform == SPOTIFY && strstr(json_file->d_name, "Video")) {
+                continue;
+              }
               char json_file_path[MAX_FILENAME_SIZE];
               if (snprintf(json_file_path, MAX_FILENAME_SIZE, "%s/%s",
                            data_dir_path, json_file->d_name) < 0) {
                 return EXIT_FAILURE;
               }
 
-              json_to_db(json_file_path);
+              json_to_db(json_file_path, platform);
             }
           }
         }
@@ -324,13 +401,12 @@ int import_spotify(void) {
   }
 
   closedir(dir);
-  add_dir_to_db(target_base);
+  add_dir_to_db(target_base, SPOTIFY);
   return EXIT_SUCCESS;
 }
 
 int main(void) {
-  // import_spotify();
-  // add_dir_to_db("./spotify-data/extracted");
+  import_spotify();
 
   return EXIT_SUCCESS;
 }
