@@ -1,6 +1,8 @@
 #include <cjson/cJSON.h>
 #include <dirent.h>
 #include <errno.h>
+#include <libpq-fe.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,12 +26,109 @@ int extract(const char *path, const char *target);
 int get_artist_plays(const char *json_file, const char *artist);
 int import_spotify(void);
 int add_dir_to_db(const char *path);
-int add_to_db(const char *json_file);
+int json_to_db(const char *json_file);
+int create_db(void);
+bool db_exists(void);
+bool table_exists(const char *name, PGconn *conn);
+int create_table(const char *name, PGconn *conn);
 
-int add_to_db(const char *json_file) {
+bool table_exists(const char *name, PGconn *conn) {
+  PGresult *result =
+      PQexecParams(conn,
+                   "SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = "
+                   "'public' AND tablename = $1);",
+                   1, NULL, &name, NULL, NULL, 0);
+  if (PQresultStatus(result) != PGRES_TUPLES_OK) {
+    printf("SELECT EXISTS failed: %s\n", PQerrorMessage(conn));
+    PQclear(result);
+    return false;
+  }
+  PQclear(result);
+  return (strcmp(PQgetvalue(result, 0, 0), "t") == 0);
+}
+
+bool db_exists(void) {
+  PGconn *tmp_conn =
+      PQconnectdb("host=localhost port=5432 dbname=postgres user=postgres "
+                  "password=postgres");
+  if (PQstatus(tmp_conn) != CONNECTION_OK) {
+    printf("Temporary database connection failed: %s\n",
+           PQerrorMessage(tmp_conn));
+    PQfinish(tmp_conn);
+    return false;
+  }
+  PGresult *result =
+      PQexec(tmp_conn, "SELECT 1 FROM pg_database WHERE datname = 'muzi'");
+  if (PQresultStatus(result) != PGRES_TUPLES_OK) {
+    printf("SELECT command failed: %s\n", PQerrorMessage(tmp_conn));
+    PQclear(result);
+    PQfinish(tmp_conn);
+    return false;
+  }
+  if (PQntuples(result) > 0) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+int create_db(void) {
+  PGconn *tmp_conn =
+      PQconnectdb("host=localhost port=5432 dbname=postgres user=postgres "
+                  "password=postgres");
+  if (PQstatus(tmp_conn) != CONNECTION_OK) {
+    printf("Temporary database connection failed: %s\n",
+           PQerrorMessage(tmp_conn));
+    PQfinish(tmp_conn);
+    return EXIT_FAILURE;
+  }
+  printf("Database connection successful.\n");
+  if (PQresultStatus(PQexec(tmp_conn, "CREATE DATABASE muzi")) !=
+      PGRES_COMMAND_OK) {
+    printf("CREATE DATABASE muzi failed: %s\n", PQerrorMessage(tmp_conn));
+    PQfinish(tmp_conn);
+    return EXIT_FAILURE;
+  }
+  PQfinish(tmp_conn);
+  printf("muzi database created successfully.\n");
+  return EXIT_SUCCESS;
+}
+
+int json_to_db(const char *json_file) {
+  if (db_exists() == false) {
+    create_db();
+  }
+  PGconn *conn =
+      PQconnectdb("host=localhost port=5432 dbname=muzi user=postgres "
+                  "password=postgres");
+  if (PQstatus(conn) != CONNECTION_OK) {
+    printf("Temporary database connection failed: %s\n", PQerrorMessage(conn));
+    PQfinish(conn);
+    return EXIT_FAILURE;
+  }
+  printf("Database connection successful.\n");
+
+  bool e = table_exists("history", conn);
+  if (e) {
+    printf("history table exists\n");
+  } else {
+    printf("history table doesn't exist\n");
+
+    PQexec(conn, "CREATE TABLE history ( date TEXT)");
+
+    e = table_exists("history", conn);
+    if (e) {
+      printf("history table exists\n");
+    } else {
+      printf("still doesn't exist!!\n");
+    }
+  }
+
   // for json_entry in json_file {
   //  add to database
   // }
+
+  PQfinish(conn);
   return EXIT_SUCCESS;
 }
 
@@ -60,7 +159,7 @@ int add_dir_to_db(const char *path) {
                 return EXIT_FAILURE;
               }
 
-              add_to_db(json_file_path);
+              json_to_db(json_file_path);
             }
           }
         }
@@ -230,5 +329,6 @@ int import_spotify(void) {
 int main(void) {
   // import_spotify();
   // add_dir_to_db("./spotify-data/extracted");
+
   return EXIT_SUCCESS;
 }

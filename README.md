@@ -5,6 +5,7 @@ Self hosted music listening statistics
 ### Dependencies:
 - cJSON (https://github.com/DaveGamble/cJSON)
 - libzip (https://libzip.org/)
+- PostgreSQL (https://www.postgresql.org/)
 
 ### plans:
 - Ability to import all listening statistics and scrobbles from lastfm, spotify, apple music
@@ -13,7 +14,7 @@ Self hosted music listening statistics
 - grid maker (3x3-10x10)
 - multi artist scrobbling
 - ability to change artist image
-- AI powered suggestions/recommendation algorithm
+- optional AI powered suggestions/recommendation algorithm
 - webUI
 - ability to "sync" scrobbles (send from a device to the server)
 - live scrobbling to the server

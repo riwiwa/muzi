@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-Wall -Wextra -Wpedantic -std=c11 -fdiagnostics-color=always -D_DEFAULT_SOURCE -g -I./include
-LIBS=-Wl,--no-as-needed -lcjson -lzip
+LIBS=-Wl,--no-as-needed -lcjson -lzip -lpq
 TARGET=muzi
 SOURCES = muzi.c
 OBJECTS = $(SOURCES:.c=.o)
