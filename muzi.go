@@ -7,6 +7,26 @@ import "strings"
 import "os"
 import "io"
 
+func importSpotify() {
+	path := filepath.Join(".", "spotify-data", "zip")
+	targetBase := filepath.Join(".", "spotify-data", "extracted")
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		panic(err)
+	}
+	for _, f:= range entries {
+		_, err := zip.OpenReader(filepath.Join(path, f.Name()))	
+		if (err == nil) {
+			fileName := f.Name()
+			fileFullPath := filepath.Join(path, fileName)	
+			fileBaseName := fileName[:(strings.LastIndex(fileName, "."))]
+			targetDirFullPath := filepath.Join(targetBase, fileBaseName)
+
+			extract(fileFullPath, targetDirFullPath)
+		}
+	}
+}
+
 func extract(path string, target string) {
 	archive, err := zip.OpenReader(path)
 	if (err != nil) {
@@ -27,7 +47,7 @@ func extract(path string, target string) {
 			return
 		}
 		if f.FileInfo().IsDir() {
-			fmt.Println("Creating Directory")
+			fmt.Println("Creating Directory", filePath)
 			os.MkdirAll(filePath, os.ModePerm)
 			continue
 		}
