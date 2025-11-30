@@ -51,5 +51,4 @@ func extract(path string, target string) {
 }
 
 func main() {
-	extract("./spotify-data/zip/rileyman35@gmail.com-my_spotify_data.zip", "./spotify-data/extracted/")
 }
