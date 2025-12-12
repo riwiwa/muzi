@@ -21,7 +21,6 @@ Self hosted music listening statistics
 - grid maker (3x3-10x10)
 - multi artist scrobbling
 - ability to change artist image
-- optional AI powered suggestions/recommendation algorithm
 - webUI
 - ability to "sync" scrobbles (send from a device to the server)
 - live scrobbling to the server
