@@ -1,11 +1,6 @@
-# muzi
+# muzi (go port)
 
 Self hosted music listening statistics
-
-### Dependencies:
-- cJSON (https://github.com/DaveGamble/cJSON)
-- libzip (https://libzip.org/)
-- PostgreSQL (https://www.postgresql.org/)
 
 ### plans:
 - Ability to import all listening statistics and scrobbles from lastfm, spotify, apple music
