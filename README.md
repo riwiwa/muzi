@@ -1,4 +1,4 @@
-# muzi (go port)
+# muzi
 
 Self hosted music listening statistics
 
