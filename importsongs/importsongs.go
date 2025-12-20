@@ -1,4 +1,4 @@
-package main
+package importsongs
 
 import (
 	"archive/zip"
@@ -18,7 +18,7 @@ const (
 	apple
 )
 
-func tableExists(name string, conn *pgx.Conn) bool {
+func TableExists(name string, conn *pgx.Conn) bool {
 	var exists bool
 	err := conn.QueryRow(context.Background(), "SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = $1);", name).Scan(&exists)
 	if err != nil {
@@ -28,7 +28,7 @@ func tableExists(name string, conn *pgx.Conn) bool {
 	return exists
 }
 
-func dbExists() bool {
+func DbExists() bool {
 	conn, err := pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/muzi")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
@@ -38,7 +38,7 @@ func dbExists() bool {
 	return true
 }
 
-func createDB() error {
+func CreateDB() error {
 	conn, err := pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot connect to PostgreSQL: %v\n", err)
@@ -53,9 +53,9 @@ func createDB() error {
 	return nil
 }
 
-func jsonToDB(jsonFile string, platform int) {
-	if !dbExists() {
-		err := createDB()
+func JsonToDB(jsonFile string, platform int) {
+	if !DbExists() {
+		err := CreateDB()
 		if err != nil {
 			panic(err)
 		}
@@ -66,7 +66,7 @@ func jsonToDB(jsonFile string, platform int) {
 		panic(err)
 	}
 	defer conn.Close(context.Background())
-	if !tableExists("history", conn) {
+	if !TableExists("history", conn) {
 		_, err = conn.Exec(context.Background(), "CREATE TABLE history ( ms_played INTEGER, timestamp TIMESTAMPTZ, song_name TEXT, artist TEXT, album_name TEXT, PRIMARY KEY (timestamp, ms_played, artist, song_name));")
 	}
 	if err != nil {
@@ -123,7 +123,7 @@ func jsonToDB(jsonFile string, platform int) {
 	}
 }
 
-func addDirToDB(path string, platform int) {
+func AddDirToDB(path string, platform int) {
 	dirs, err := os.ReadDir(path)
 	if err != nil {
 		panic(err)
@@ -146,12 +146,12 @@ func addDirToDB(path string, platform int) {
 				}
 			}
 			jsonFilePath := filepath.Join(subPath, jsonFileName)
-			jsonToDB(jsonFilePath, platform)
+			JsonToDB(jsonFilePath, platform)
 		}
 	}
 }
 
-func importSpotify() {
+func ImportSpotify() {
 	path := filepath.Join(".", "spotify-data", "zip")
 	targetBase := filepath.Join(".", "spotify-data", "extracted")
 	entries, err := os.ReadDir(path)
@@ -166,13 +166,13 @@ func importSpotify() {
 			fileBaseName := fileName[:(strings.LastIndex(fileName, "."))]
 			targetDirFullPath := filepath.Join(targetBase, fileBaseName)
 
-			extract(fileFullPath, targetDirFullPath)
+			Extract(fileFullPath, targetDirFullPath)
 		}
 	}
-	addDirToDB(targetBase, spotify)
+	AddDirToDB(targetBase, spotify)
 }
 
-func extract(path string, target string) {
+func Extract(path string, target string) {
 	archive, err := zip.OpenReader(path)
 	if err != nil {
 		panic(err)
@@ -212,8 +212,4 @@ func extract(path string, target string) {
 		fileToExtract.Close()
 		extractedFile.Close()
 	}
-}
-
-func main() {
-	importSpotify()
 }
