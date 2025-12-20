@@ -28,8 +28,8 @@
     </div>
     {{$page := .Page}}
     <div class=page_buttons>
-      <a href="http://10.0.0.36:1234/history?page={{Sub $page 1}}">Prev Page</a>
-      <a href="http://10.0.0.36:1234/history?page={{Add $page 1}}">Next Page</a>
+      <a href="/history?page={{Sub $page 1}}">Prev Page</a>
+      <a href="/history?page={{Add $page 1}}">Next Page</a>
     </div>
   </body>
 </html>
