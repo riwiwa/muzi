@@ -31,7 +31,6 @@ func TableExists(name string, conn *pgx.Conn) bool {
 func DbExists() bool {
 	conn, err := pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/muzi")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
 		return false
 	}
 	defer conn.Close(context.Background())
@@ -152,8 +151,8 @@ func AddDirToDB(path string, platform int) {
 }
 
 func ImportSpotify() {
-	path := filepath.Join(".", "spotify-data", "zip")
-	targetBase := filepath.Join(".", "spotify-data", "extracted")
+	path := filepath.Join(".", "imports", "spotify", "zip")
+	targetBase := filepath.Join(".", "imports", "spotify", "extracted")
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		panic(err)

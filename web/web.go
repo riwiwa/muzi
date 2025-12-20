@@ -143,11 +143,13 @@ func tmp(w http.ResponseWriter, r *http.Request) {
 }
 
 func Start() {
+	addr := ":1234"
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Get("/static/style.css", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./static/style.css")
 	})
 	r.Get("/history", tmp)
-	http.ListenAndServe(":1234", r)
+	fmt.Printf("WebUI starting on %s\n", addr)
+	http.ListenAndServe(addr, r)
 }
