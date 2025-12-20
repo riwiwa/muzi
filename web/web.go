@@ -106,11 +106,17 @@ func tmp(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close(context.Background())
 
+	var pageInt int
+
 	pageStr := r.URL.Query().Get("page")
-	pageInt, err := strconv.Atoi(pageStr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot convert page URL query from string to int: %v\n", err)
-		return
+	if pageStr == "" {
+		pageInt = 1
+	} else {
+		pageInt, err = strconv.Atoi(pageStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot convert page URL query from string to int: %v\n", err)
+			return
+		}
 	}
 
 	lim := 25
