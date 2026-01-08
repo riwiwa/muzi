@@ -68,6 +68,5 @@ func main() {
 		return
 	}
 
-	importsongs.ImportSpotify()
 	web.Start()
 }

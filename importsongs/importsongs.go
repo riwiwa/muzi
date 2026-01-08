@@ -5,11 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -146,6 +150,97 @@ func AddDirToDB(path string, platform int) {
 			}
 			jsonFilePath := filepath.Join(subPath, jsonFileName)
 			JsonToDB(jsonFilePath, platform)
+		}
+	}
+}
+
+func ImportLastFM() {
+	if !DbExists() {
+		err := CreateDB()
+		if err != nil {
+			panic(err)
+		}
+	}
+	conn, err := pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/muzi")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
+		panic(err)
+	}
+	defer conn.Close(context.Background())
+	if !TableExists("history", conn) {
+		_, err = conn.Exec(context.Background(), "CREATE TABLE history ( ms_played INTEGER, timestamp TIMESTAMPTZ, song_name TEXT, artist TEXT, album_name TEXT, PRIMARY KEY (timestamp, ms_played, artist, song_name));")
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot create history table: %v\n", err)
+		panic(err)
+	}
+
+	username := ""
+	apiKey := ""
+
+	resp, err := http.Get("https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" + username + "&api_key=" + apiKey + "&format=json&limit=1")
+	if err != nil {
+		panic(err)
+	}
+	type Response struct {
+		Recenttracks struct {
+			Track []struct {
+				Artist struct {
+					Mbid string `json:"mbid"`
+					Text string `json:"#text"`
+				} `json:"artist"`
+				Streamable string `json:"streamable"`
+				Image      []struct {
+					Size string `json:"size"`
+					Text string `json:"#text"`
+				} `json:"image"`
+				Mbid  string `json:"mbid"`
+				Album struct {
+					Mbid string `json:"mbid"`
+					Text string `json:"#text"`
+				} `json:"album"`
+				Name string `json:"name"`
+				URL  string `json:"url"`
+				Date struct {
+					Uts  string `json:"uts"`
+					Text string `json:"#text"`
+				} `json:"date"`
+			} `json:"track"`
+			Attr struct {
+				PerPage    string `json:"perPage"`
+				TotalPages string `json:"totalPages"`
+				Page       string `json:"page"`
+				Total      string `json:"total"`
+				User       string `json:"user"`
+			} `json:"@attr"`
+		} `json:"recenttracks"`
+	}
+	var data Response
+	json.NewDecoder(resp.Body).Decode(&data)
+	totalPages, err := strconv.Atoi(data.Recenttracks.Attr.TotalPages)
+	if totalPages%100 != 0 {
+		totalPages = totalPages / 100
+		totalPages++
+	} else {
+		totalPages = totalPages / 100
+	}
+
+	for i := 1; i <= totalPages; i++ {
+		resp, err := http.Get("https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" + username + "&api_key=" + apiKey + "&format=json&limit=100&page=" + strconv.Itoa(i))
+		if err != nil {
+			panic(err)
+		}
+		json.NewDecoder(resp.Body).Decode(&data)
+		for j := range 100 {
+			unixTime, err := strconv.ParseInt(data.Recenttracks.Track[j].Date.Uts, 10, 64)
+			if err != nil {
+				panic(err)
+			}
+			ts := time.Unix(unixTime, 0)
+			_, err = conn.Exec(context.Background(), "INSERT INTO history (timestamp, song_name, artist, album_name, ms_played) VALUES ($1, $2, $3, $4, $5);", ts, data.Recenttracks.Track[j].Name, data.Recenttracks.Track[j].Artist.Text, data.Recenttracks.Track[j].Album.Text, 0)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Couldn't add track to muzi DB (%s): %v\n", (data.Recenttracks.Track[j].Artist.Text + " - " + data.Recenttracks.Track[j].Name), err)
+			}
 		}
 	}
 }
