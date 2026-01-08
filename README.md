@@ -4,17 +4,9 @@
 ### Dependencies
 - PostgreSQL
 
-### Installation Instructions (for testing and development) \[Only Supports Spotify Imports ATM\]:
-1. Clone the repo:<br>```git clone https://github.com/riwiwa/muzi```
-2. Copy over all zip archives obtained from Spotify into the ```imports/spotify-data/zip/``` directory.
-3. Ensure PostgreSQL is installed and running locally on port 5432.
-4. Run the app with:<br>```go run main.go```
-5. Navigate to ```localhost:1234/history``` to see your sorted listening history.
-6. Comment out ```importsongs.ImportSpotify()``` from ```main.go``` to prevent the app's attempts to import the Spotify data again
-
 ### Roadmap:
 - Ability to import all listening statistics and scrobbles from: \[In Progress\]
-    - lastfm
+    - lastfm \[In progress\]
     - spotify \[Complete\]
     - apple music
 
