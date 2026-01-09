@@ -3,9 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"muzi/importsongs"
 	"muzi/web"
-	"os"
 )
 
 func dbCheck() error {
@@ -20,7 +22,6 @@ func dbCheck() error {
 }
 
 func dirCheck(path string) error {
-
 	_, err := os.Stat(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -35,32 +36,48 @@ func dirCheck(path string) error {
 }
 
 func main() {
-	dirImports := "./imports/"
+	dirImports := filepath.Join(".", "imports")
 
-	dirSpotify := "./imports/spotify/"
-	dirSpotifyZip := "./imports/spotify/zip/"
-	dirSpotifyExt := "./imports/spotify/extracted/"
+	dirSpotify := filepath.Join(".", "imports", "spotify")
+	dirSpotifyZip := filepath.Join(".", "imports", "spotify", "zip")
+	dirSpotifyExt := filepath.Join(".", "imports", "spotify", "extracted")
 
+	fmt.Printf("Checking if directory %s exists...\n", dirImports)
 	err := dirCheck(dirImports)
 	if err != nil {
 		return
 	}
+	fmt.Printf("Checking if directory %s exists...\n", dirSpotify)
 	err = dirCheck(dirSpotify)
 	if err != nil {
 		return
 	}
+	fmt.Printf("Checking if directory %s exists...\n", dirSpotifyZip)
 	err = dirCheck(dirSpotifyZip)
 	if err != nil {
 		return
 	}
+	fmt.Printf("Checking if directory %s exists...\n", dirSpotifyExt)
 	err = dirCheck(dirSpotifyExt)
 	if err != nil {
 		return
 	}
+	fmt.Println("Checking if muzi database exists...")
 	err = dbCheck()
 	if err != nil {
 		return
 	}
 
+	username := ""
+	apiKey := ""
+	fmt.Printf("Importing LastFM data for %s", username)
+	err = importsongs.ImportLastFM(username, apiKey)
+	if err != nil {
+		return
+	}
+	err = importsongs.ImportSpotify()
+	if err != nil {
+		return
+	}
 	web.Start()
 }
