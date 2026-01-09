@@ -41,8 +41,6 @@ func main() {
 	dirSpotifyZip := "./imports/spotify/zip/"
 	dirSpotifyExt := "./imports/spotify/extracted/"
 
-	dirLastFM := "./imports/lastfm/"
-
 	err := dirCheck(dirImports)
 	if err != nil {
 		return
@@ -56,10 +54,6 @@ func main() {
 		return
 	}
 	err = dirCheck(dirSpotifyExt)
-	if err != nil {
-		return
-	}
-	err = dirCheck(dirLastFM)
 	if err != nil {
 		return
 	}

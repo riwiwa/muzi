@@ -83,29 +83,29 @@ func JsonToDB(jsonFile string, platform int) {
 	}
 	if platform == spotify {
 		type Track struct {
-			Timestamp string `json:"ts"`
-			//Platform            string `json:"platform"`
-			Played int `json:"ms_played"`
-			//Country             string `json:"conn_country"`
-			//IP                  string `json:"ip_addr"`
-			Name   string `json:"master_metadata_track_name"`
-			Artist string `json:"master_metadata_album_artist_name"`
-			Album  string `json:"master_metadata_album_album_name"`
-			//TrackURI            string `json:"spotify_track_uri"`
-			//Episode             string `json:"episode_name"`
-			//Show                string `json:"episode_show_name"`
-			//EpisodeURI          string `json:"spotify_episode_uri"`
-			//Audiobook           string `json:"audiobook_title"`
-			//AudiobookURI        string `json:"audiobook_uri"`
-			//AudiobookChapterURI string `json:"audiobook_chapter_uri"`
-			//AudiobookChapter    string `json:"audiobook_chapter_title"`
-			//ReasonStart         string `json:"reason_start"`
-			//ReasonEnd           string `json:"reason_end"`
-			//Shuffle             bool   `json:"shuffle"`
-			//Skipped             bool   `json:"skipped"`
-			//Offline             bool   `json:"offline"`
-			//OfflineTimestamp    int    `json:"offline_timestamp"`
-			//Incognito           bool   `json:"incognito_mode"`
+			Timestamp           string `json:"ts"`
+			Platform            string `json:"-"`
+			Played              int    `json:"ms_played"`
+			Country             string `json:"-"`
+			IP                  string `json:"-"`
+			Name                string `json:"master_metadata_track_name"`
+			Artist              string `json:"master_metadata_album_artist_name"`
+			Album               string `json:"master_metadata_album_album_name"`
+			TrackURI            string `json:"-"`
+			Episode             string `json:"-"`
+			Show                string `json:"-"`
+			EpisodeURI          string `json:"-"`
+			Audiobook           string `json:"-"`
+			AudiobookURI        string `json:"-"`
+			AudiobookChapterURI string `json:"-"`
+			AudiobookChapter    string `json:"-"`
+			ReasonStart         string `json:"-"`
+			ReasonEnd           string `json:"-"`
+			Shuffle             bool   `json:"-"`
+			Skipped             bool   `json:"-"`
+			Offline             bool   `json:"-"`
+			OfflineTimestamp    int    `json:"-"`
+			Incognito           bool   `json:"-"`
 		}
 		var tracks []Track
 		err := json.Unmarshal(jsonData, &tracks)
@@ -186,32 +186,35 @@ func ImportLastFM() {
 		Recenttracks struct {
 			Track []struct {
 				Artist struct {
-					Mbid string `json:"mbid"`
+					Mbid string `json:"-"`
 					Text string `json:"#text"`
 				} `json:"artist"`
-				Streamable string `json:"streamable"`
+				Streamable string `json:"-"`
 				Image      []struct {
-					Size string `json:"size"`
-					Text string `json:"#text"`
-				} `json:"image"`
-				Mbid  string `json:"mbid"`
+					Size string `json:"-"`
+					Text string `json:"-"`
+				} `json:"-"`
+				Mbid  string `json:"-"`
 				Album struct {
-					Mbid string `json:"mbid"`
+					Mbid string `json:"-"`
 					Text string `json:"#text"`
 				} `json:"album"`
 				Name string `json:"name"`
-				URL  string `json:"url"`
+				Attr struct {
+					Nowplaying string `json:"nowplaying"`
+				} `json:"@attr,omitempty"`
+				URL  string `json:"-"`
 				Date struct {
 					Uts  string `json:"uts"`
-					Text string `json:"#text"`
+					Text string `json:"-"`
 				} `json:"date"`
 			} `json:"track"`
 			Attr struct {
-				PerPage    string `json:"perPage"`
+				PerPage    string `json:"-"`
 				TotalPages string `json:"totalPages"`
 				Page       string `json:"page"`
-				Total      string `json:"total"`
-				User       string `json:"user"`
+				Total      string `json:"-"`
+				User       string `json:"-"`
 			} `json:"@attr"`
 		} `json:"recenttracks"`
 	}
@@ -231,7 +234,10 @@ func ImportLastFM() {
 			panic(err)
 		}
 		json.NewDecoder(resp.Body).Decode(&data)
-		for j := range 100 {
+		for j := range data.Recenttracks.Track {
+			if data.Recenttracks.Track[j].Attr.Nowplaying == "true" {
+				continue
+			}
 			unixTime, err := strconv.ParseInt(data.Recenttracks.Track[j].Date.Uts, 10, 64)
 			if err != nil {
 				panic(err)
