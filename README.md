@@ -1,14 +1,15 @@
 # Muzi
 ## Self-hosted music listening statistics
 
-### Dependencies
+### Requirements
+- Go 1.25.4+
 - PostgreSQL
 
 ### Roadmap:
 - Ability to import all listening statistics and scrobbles from: \[In Progress\]
-    - lastfm \[In progress\]
-    - spotify \[Complete\]
-    - apple music
+    - LastFM \[Complete\]
+    - Spotify \[Complete\]
+    - Apple Music \[Planned\]
 
 - WebUI \[In Progress\]
     - Full listening history with time \[Functional\]
@@ -18,5 +19,5 @@
     - Ability to change artist image
 - Multi artist scrobbling
 - Ability to "sync" offline scrobbles (send from a device to the server)
-- Live scrobbling to the server
+- Live scrobbling to the server (Now playing)
 - Batch scrobble editor
