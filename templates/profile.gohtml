@@ -14,9 +14,32 @@
         <h2>{{.Bio}}</h2>
       </div>
       <div class="user-stats-top">
-        <h3>101238 Listens</h3>
-        <h3>1298 Artists</h3>
+        <h3>{{.ScrobbleCount}} Listens</h3>
+        <h3>{{.ArtistCount}} Artists</h3>
       </div>
+    </div>
+    <div class="history">
+      <h3>Listening History</h3>
+      <table>
+        <tr>
+          <th>Artist</th>
+          <th>Title</th>
+          <th>Timestamp</th>
+        </tr>
+        {{$artists := .Artists}}
+        {{$times := .Times}}
+        {{range $index, $title := .Titles}}
+        <tr>
+          <td>{{index $artists $index}}</td>
+          <td>{{$title}}</td>
+          <td>{{index $times $index}}</td>
+        </tr>
+        {{end}}
+      </table>
+    </div>
+    <div class="page_buttons">
+      <a href="/profile/{{.Username}}?page={{Sub .Page 1}}">Prev Page</a>
+      <a href="/profile/{{.Username}}?page={{Add .Page 1}}">Next Page</a>
     </div>
   </body>
 </html>

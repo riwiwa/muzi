@@ -8,7 +8,7 @@ import (
 	"os"
 	"strconv"
 
-	"muzi/migrate"
+	"muzi/db"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -18,12 +18,17 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type PageData struct {
-	Content int
-	Artists []string
-	Titles  []string
-	Times   []string
-	Page    int
+type ProfileData struct {
+	Username            string
+	Bio                 string
+	Pfp                 string
+	AllowDuplicateEdits bool
+	ScrobbleCount       int
+	ArtistCount         int
+	Artists             []string
+	Titles              []string
+	Times               []string
+	Page                int
 }
 
 func Sub(a int, b int) int {
@@ -34,16 +39,24 @@ func Add(a int, b int) int {
 	return a + b
 }
 
-func getTimes(conn *pgx.Conn, lim int, off int) []string {
+func getUserIdByUsername(conn *pgx.Conn, username string) (int, error) {
+	var userId int
+	err := conn.QueryRow(context.Background(), "SELECT pk FROM users WHERE username = $1;", username).
+		Scan(&userId)
+	return userId, err
+}
+
+func getTimes(conn *pgx.Conn, userId int, lim int, off int) []string {
 	var times []string
 	rows, err := conn.Query(
 		context.Background(),
-		"SELECT timestamp FROM history ORDER BY timestamp DESC LIMIT $1 OFFSET $2;",
+		"SELECT timestamp FROM history WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2 OFFSET $3;",
+		userId,
 		lim,
 		off,
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "SELECT COUNT failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "SELECT timestamp failed: %v\n", err)
 		return nil
 	}
 	for rows.Next() {
@@ -58,16 +71,17 @@ func getTimes(conn *pgx.Conn, lim int, off int) []string {
 	return times
 }
 
-func getTitles(conn *pgx.Conn, lim int, off int) []string {
+func getTitles(conn *pgx.Conn, userId int, lim int, off int) []string {
 	var titles []string
 	rows, err := conn.Query(
 		context.Background(),
-		"SELECT song_name FROM history ORDER BY timestamp DESC LIMIT $1 OFFSET $2;",
+		"SELECT song_name FROM history WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2 OFFSET $3;",
+		userId,
 		lim,
 		off,
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "SELECT COUNT failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "SELECT song_name failed: %v\n", err)
 		return nil
 	}
 	for rows.Next() {
@@ -82,16 +96,17 @@ func getTitles(conn *pgx.Conn, lim int, off int) []string {
 	return titles
 }
 
-func getArtists(conn *pgx.Conn, lim int, off int) []string {
+func getArtists(conn *pgx.Conn, userId int, lim int, off int) []string {
 	var artists []string
 	rows, err := conn.Query(
 		context.Background(),
-		"SELECT artist FROM history ORDER BY timestamp DESC LIMIT $1 OFFSET $2;",
+		"SELECT artist FROM history WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2 OFFSET $3;",
+		userId,
 		lim,
 		off,
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "SELECT COUNT failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "SELECT artist failed: %v\n", err)
 		return nil
 	}
 	for rows.Next() {
@@ -106,11 +121,23 @@ func getArtists(conn *pgx.Conn, lim int, off int) []string {
 	return artists
 }
 
-func getScrobbles(conn *pgx.Conn) int {
+func getScrobbles(conn *pgx.Conn, userId int) int {
 	var count int
-	err := conn.QueryRow(context.Background(), "SELECT COUNT (*) FROM history;").Scan(&count)
+	err := conn.QueryRow(context.Background(), "SELECT COUNT(*) FROM history WHERE user_id = $1;", userId).
+		Scan(&count)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "SELECT COUNT failed: %v\n", err)
+		return 0
+	}
+	return count
+}
+
+func getArtistCount(conn *pgx.Conn, userId int) int {
+	var count int
+	err := conn.QueryRow(context.Background(), "SELECT COUNT(DISTINCT artist) FROM history WHERE user_id = $1;", userId).
+		Scan(&count)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "SELECT artist count failed: %v\n", err)
 		return 0
 	}
 	return count
@@ -150,31 +177,18 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 		username := r.FormValue("uname")
 		hashedPassword := hashPassword([]byte(r.FormValue("pass")))
 
-		if !migrate.TableExists("users", conn) {
-			_, err = conn.Exec(
-				context.Background(),
-				`CREATE TABLE users (
-					username TEXT,
-					password TEXT,
-					bio TEXT,
-					pfp TEXT,
-					pk SERIAL,
-					PRIMARY KEY (pk)
-				);`,
-			)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot create users table: %v\n", err)
-				panic(err)
-			}
+		err = db.CreateUsersTable(conn)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error ensuring users table exists: %v\n", err)
+			http.Redirect(w, r, "/createaccount", http.StatusSeeOther)
+			return
 		}
 
 		_, err = conn.Exec(
 			context.Background(),
-			`INSERT INTO users (username, password, bio, pfp) VALUES ($1, $2, $3, $4);`,
+			`INSERT INTO users (username, password) VALUES ($1, $2);`,
 			username,
 			hashedPassword,
-			"This profile has no bio.",
-			"/files/assets/default.png",
 		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot add new user to users table: %v\n", err)
@@ -255,61 +269,6 @@ func loginPageHandler() http.HandlerFunc {
 	}
 }
 
-func historyPage(w http.ResponseWriter, r *http.Request) {
-	conn, err := pgx.Connect(
-		context.Background(),
-		"postgres://postgres:postgres@localhost:5432/muzi",
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
-		return
-	}
-	defer conn.Close(context.Background())
-
-	var pageInt int
-
-	pageStr := r.URL.Query().Get("page")
-	if pageStr == "" {
-		pageInt = 1
-	} else {
-		pageInt, err = strconv.Atoi(pageStr)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Cannot convert page URL query from string to int: %v\n", err)
-			return
-		}
-	}
-
-	lim := 25
-	off := 0 + (25 * (pageInt - 1))
-
-	data := PageData{
-		Content: getScrobbles(conn),
-		Artists: getArtists(conn, lim, off),
-		Titles:  getTitles(conn, lim, off),
-		Times:   getTimes(conn, lim, off),
-		Page:    pageInt,
-	}
-
-	funcMap := template.FuncMap{
-		"Sub": Sub,
-		"Add": Add,
-	}
-
-	tmp, err := template.New("history.gohtml").
-		Funcs(funcMap).
-		ParseFiles("./templates/history.gohtml")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = tmp.Execute(w, data)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
 func profilePageHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := chi.URLParam(r, "username")
@@ -325,21 +284,56 @@ func profilePageHandler() http.HandlerFunc {
 		}
 		defer conn.Close(context.Background())
 
-		var profileData Profile
+		userId, err := getUserIdByUsername(conn, username)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot find user %s: %v\n", username, err)
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+
+		pageStr := r.URL.Query().Get("page")
+		var pageInt int
+		if pageStr == "" {
+			pageInt = 1
+		} else {
+			pageInt, err = strconv.Atoi(pageStr)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot convert page URL query from string to int: %v\n", err)
+				pageInt = 1
+			}
+		}
+
+		lim := 15
+		off := (pageInt - 1) * lim
+
+		var profileData ProfileData
 
 		err = conn.QueryRow(
 			context.Background(),
-			"SELECT bio, pfp FROM users WHERE username = $1;",
-			username,
-		).Scan(&profileData.Bio, &profileData.Pfp)
+			"SELECT bio, pfp, allow_duplicate_edits FROM users WHERE pk = $1;",
+			userId,
+		).Scan(&profileData.Bio, &profileData.Pfp, &profileData.AllowDuplicateEdits)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot get profile for %s: %v\n", username, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		profileData.Username = username
+		profileData.ScrobbleCount = getScrobbles(conn, userId)
+		profileData.ArtistCount = getArtistCount(conn, userId)
+		profileData.Artists = getArtists(conn, userId, lim, off)
+		profileData.Titles = getTitles(conn, userId, lim, off)
+		profileData.Times = getTimes(conn, userId, lim, off)
+		profileData.Page = pageInt
 
-		tmp, err := template.ParseFiles("./templates/profile.gohtml")
+		funcMap := template.FuncMap{
+			"Sub": Sub,
+			"Add": Add,
+		}
+
+		tmp, err := template.New("profile.gohtml").
+			Funcs(funcMap).
+			ParseFiles("./templates/profile.gohtml")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -348,10 +342,33 @@ func profilePageHandler() http.HandlerFunc {
 	}
 }
 
-type Profile struct {
-	Username string
-	Bio      string
-	Pfp      string
+func updateDuplicateEditsSetting(w http.ResponseWriter, r *http.Request) {
+	conn, err := pgx.Connect(
+		context.Background(),
+		"postgres://postgres:postgres@localhost:5432/muzi",
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
+		return
+	}
+	defer conn.Close(context.Background())
+
+	if r.Method == "POST" {
+		r.ParseForm()
+		username := r.FormValue("username")
+		allow := r.FormValue("allow") == "true"
+
+		_, err = conn.Exec(
+			context.Background(),
+			`UPDATE users SET allow_duplicate_edits = $1 WHERE username = $2;`,
+			allow,
+			username,
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error updating setting: %v\n", err)
+		}
+		http.Redirect(w, r, "/profile/"+username, http.StatusSeeOther)
+	}
 }
 
 func Start() {
@@ -359,12 +376,12 @@ func Start() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(http.Dir("./static"))))
-	r.Get("/history", historyPage)
 	r.Get("/login", loginPageHandler())
 	r.Get("/createaccount", createAccountPageHandler())
 	r.Get("/profile/{username}", profilePageHandler())
 	r.Post("/loginsubmit", loginSubmit)
 	r.Post("/createaccountsubmit", createAccount)
+	r.Post("/settings/duplicate-edits", updateDuplicateEditsSetting)
 	fmt.Printf("WebUI starting on %s\n", addr)
 	http.ListenAndServe(addr, r)
 }

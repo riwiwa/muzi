@@ -15,6 +15,7 @@ import (
 )
 
 type LastFMTrack struct {
+	UserId    int
 	Timestamp time.Time
 	SongName  string
 	Artist    string
@@ -50,36 +51,16 @@ type Response struct {
 	} `json:"recenttracks"`
 }
 
-func ImportLastFM(username string, apiKey string) error {
-	if !DbExists() {
-		err := CreateDB()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating muzi database: %v\n", err)
-			panic(err)
-		}
-	}
+func ImportLastFM(username string, apiKey string, userId int) error {
 	conn, err := pgx.Connect(
 		context.Background(),
 		"postgres://postgres:postgres@localhost:5432/muzi",
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
-		panic(err)
+		return err
 	}
 	defer conn.Close(context.Background())
-
-	if !TableExists("history", conn) {
-		_, err = conn.Exec(
-			context.Background(),
-			`CREATE TABLE history ( ms_played INTEGER, timestamp TIMESTAMPTZ, 
-				song_name TEXT, artist TEXT, album_name TEXT, PRIMARY KEY (timestamp, 
-				ms_played, artist, song_name));`,
-		)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Cannot create history table: %v\n", err)
-			panic(err)
-		}
-	}
 
 	totalImported := 0
 
@@ -106,13 +87,11 @@ func ImportLastFM(username string, apiKey string) error {
 	pageChan := make(chan pageResult, 20)
 
 	var wg sync.WaitGroup
-	// use 10 workers
 	wg.Add(10)
 
 	for worker := range 10 {
 		go func(workerID int) {
 			defer wg.Done()
-			// distrubute 10 pages to each worker
 			for page := workerID + 1; page <= totalPages; page += 10 {
 				resp, err := http.Get(
 					"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" +
@@ -140,6 +119,7 @@ func ImportLastFM(username string, apiKey string) error {
 						continue
 					}
 					pageTracks = append(pageTracks, LastFMTrack{
+						UserId:    userId,
 						Timestamp: time.Unix(unixTime, 0),
 						SongName:  data.Recenttracks.Track[j].Name,
 						Artist:    data.Recenttracks.Track[j].Artist.Text,
@@ -197,22 +177,35 @@ func insertBatch(conn *pgx.Conn, tracks []LastFMTrack, totalImported *int, batch
 
 	for i, track := range tracks {
 		batchValues = append(batchValues, fmt.Sprintf(
-			"($%d, $%d, $%d, $%d, $%d)",
-			len(
-				batchArgs,
-			)+1,
+			"($%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			len(batchArgs)+1,
 			len(batchArgs)+2,
 			len(batchArgs)+3,
 			len(batchArgs)+4,
 			len(batchArgs)+5,
+			len(batchArgs)+6,
+			len(batchArgs)+7,
 		))
-		batchArgs = append(batchArgs, track.Timestamp, track.SongName, track.Artist, track.Album, 0)
+		// lastfm doesn't store playtime for each track, so set to 0
+		batchArgs = append(
+			batchArgs,
+			track.UserId,
+			track.Timestamp,
+			track.SongName,
+			track.Artist,
+			track.Album,
+			0,
+			"lastfm",
+		)
 
 		if len(batchValues) >= batchSize || i == len(tracks)-1 {
 			result, err := tx.Exec(
 				context.Background(),
-				`INSERT INTO history (timestamp, song_name, artist, album_name, ms_played) VALUES `+
-					strings.Join(batchValues, ", ")+` ON CONFLICT DO NOTHING;`,
+				`INSERT INTO history (user_id, timestamp, song_name, artist, album_name, ms_played, platform) VALUES `+
+					strings.Join(
+						batchValues,
+						", ",
+					)+` ON CONFLICT ON CONSTRAINT history_user_id_song_name_artist_timestamp_key DO NOTHING;`,
 				batchArgs...,
 			)
 			if err != nil {

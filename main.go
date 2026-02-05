@@ -1,18 +1,22 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"muzi/db"
 	"muzi/migrate"
 	"muzi/web"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func dbCheck() error {
-	if !migrate.DbExists() {
-		err := migrate.CreateDB()
+	if !db.DbExists() {
+		err := db.CreateDB()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating muzi DB: %v\n", err)
 			return err
@@ -68,14 +72,40 @@ func main() {
 		return
 	}
 
+	fmt.Println("Setting up database tables...")
+	conn, err := pgx.Connect(
+		context.Background(),
+		"postgres://postgres:postgres@localhost:5432/muzi",
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
+		return
+	}
+	defer conn.Close(context.Background())
+
+	err = db.CreateHistoryTable(conn)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating history table: %v\n", err)
+		return
+	}
+
+	err = db.CreateUsersTable(conn)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating users table: %v\n", err)
+		return
+	}
+
 	username := ""
 	apiKey := ""
 	fmt.Printf("Importing LastFM data for %s\n", username)
-	err = migrate.ImportLastFM(username, apiKey)
+	// TODO:
+	// remove hardcoded userID by creating webUI import pages and getting
+	// userID from login session
+	err = migrate.ImportLastFM(username, apiKey, 1)
 	if err != nil {
 		return
 	}
-	err = migrate.ImportSpotify()
+	err = migrate.ImportSpotify(1)
 	if err != nil {
 		return
 	}

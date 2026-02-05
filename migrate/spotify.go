@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -39,59 +40,85 @@ type SpotifyTrack struct {
 	Incognito           bool   `json:"-"`
 }
 
-func trackKey(t SpotifyTrack) string {
-	return fmt.Sprintf("%s|%d|%s|%s", t.Timestamp, t.Played, t.Artist, t.Name)
+type existingTrack struct {
+	Timestamp time.Time
+	SongName  string
+	Artist    string
 }
 
-func getExistingTracks(conn *pgx.Conn, tracks []SpotifyTrack) (map[string]bool, error) {
+func getExistingTracks(conn *pgx.Conn, userId int, tracks []SpotifyTrack) (map[string]bool, error) {
 	if len(tracks) == 0 {
 		return map[string]bool{}, nil
 	}
 
-	var conditions []string
-	var args []any
-
-	for i, t := range tracks {
-		base := i * 4
-		conditions = append(conditions,
-			fmt.Sprintf("(timestamp=$%d AND ms_played=$%d AND artist=$%d AND song_name=$%d)",
-				base+1, base+2, base+3, base+4))
-		args = append(args, t.Timestamp, t.Played, t.Artist, t.Name)
+	// find min/max timestamps in this batch to create time window
+	var minTs, maxTs time.Time
+	for _, t := range tracks {
+		ts, err := time.Parse(time.RFC3339Nano, t.Timestamp)
+		if err != nil {
+			continue
+		}
+		if minTs.IsZero() || ts.Before(minTs) {
+			minTs = ts
+		}
+		if ts.After(maxTs) {
+			maxTs = ts
+		}
 	}
 
-	query := fmt.Sprintf(
-		"SELECT timestamp, ms_played, artist, song_name FROM history WHERE %s",
-		strings.Join(conditions, " OR "))
+	if minTs.IsZero() {
+		return map[string]bool{}, nil
+	}
 
-	rows, err := conn.Query(context.Background(), query, args...)
+	// query only tracks within [min-20s, max+20s] window using timestamp index
+	rows, err := conn.Query(context.Background(),
+		`SELECT song_name, artist, timestamp 
+		 FROM history 
+		 WHERE user_id = $1 
+		 AND timestamp BETWEEN $2 AND $3`,
+		userId,
+		minTs.Add(-20*time.Second),
+		maxTs.Add(20*time.Second))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	existing := make(map[string]bool)
+	var existingTracks []existingTrack
 	for rows.Next() {
-		var ts string
-		var played int
-		var artist, song string
-		if err := rows.Scan(&ts, &played, &artist, &song); err != nil {
+		var t existingTrack
+		if err := rows.Scan(&t.SongName, &t.Artist, &t.Timestamp); err != nil {
 			continue
 		}
-		key := fmt.Sprintf("%s|%d|%s|%s", ts, played, artist, song)
-		existing[key] = true
+		existingTracks = append(existingTracks, t)
+	}
+
+	// check each incoming track against existing ones within 20 second window
+	for _, newTrack := range tracks {
+		newTs, err := time.Parse(time.RFC3339Nano, newTrack.Timestamp)
+		if err != nil {
+			continue
+		}
+		for _, existTrack := range existingTracks {
+			if newTrack.Name == existTrack.SongName && newTrack.Artist == existTrack.Artist {
+				diff := newTs.Sub(existTrack.Timestamp)
+				if diff < 0 {
+					diff = -diff
+				}
+				if diff < 20*time.Second {
+					key := fmt.Sprintf("%s|%s|%s", newTrack.Artist, newTrack.Name, newTrack.Timestamp)
+					existing[key] = true
+					break
+				}
+			}
+		}
 	}
 
 	return existing, nil
 }
 
-func JsonToDB(jsonFile string) error {
-	if !DbExists() {
-		err := CreateDB()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating muzi database: %v\n", err)
-			panic(err)
-		}
-	}
+func JsonToDB(jsonFile string, userId int) error {
 	conn, err := pgx.Connect(
 		context.Background(),
 		"postgres://postgres:postgres@localhost:5432/muzi",
@@ -101,18 +128,7 @@ func JsonToDB(jsonFile string) error {
 		panic(err)
 	}
 	defer conn.Close(context.Background())
-	if !TableExists("history", conn) {
-		_, err = conn.Exec(
-			context.Background(),
-			`CREATE TABLE history ( ms_played INTEGER, timestamp TIMESTAMPTZ, 
-			song_name TEXT, artist TEXT, album_name TEXT, PRIMARY KEY (timestamp, 
-			ms_played, artist, song_name));`,
-		)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot create history table: %v\n", err)
-		panic(err)
-	}
+
 	jsonData, err := os.ReadFile(jsonFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot read %s: %v\n", jsonFile, err)
@@ -136,7 +152,7 @@ func JsonToDB(jsonFile string) error {
 
 		var validTracks []SpotifyTrack
 		for i := batchStart; i < batchEnd; i++ {
-			if tracks[i].Played >= 20000 {
+			if tracks[i].Played >= 20000 && tracks[i].Name != "" && tracks[i].Artist != "" {
 				validTracks = append(validTracks, tracks[i])
 			}
 		}
@@ -145,7 +161,7 @@ func JsonToDB(jsonFile string) error {
 			continue
 		}
 
-		existing, err := getExistingTracks(conn, validTracks)
+		existing, err := getExistingTracks(conn, userId, validTracks)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error checking existing tracks: %v\n", err)
 			continue
@@ -155,20 +171,31 @@ func JsonToDB(jsonFile string) error {
 		var batchArgs []any
 
 		for _, t := range validTracks {
-			key := trackKey(t)
+			key := fmt.Sprintf("%s|%s|%s", t.Artist, t.Name, t.Timestamp)
 			if existing[key] {
 				continue
 			}
 
 			batchValues = append(batchValues, fmt.Sprintf(
-				"($%d, $%d, $%d, $%d, $%d)",
+				"($%d, $%d, $%d, $%d, $%d, $%d, $%d)",
 				len(batchArgs)+1,
 				len(batchArgs)+2,
 				len(batchArgs)+3,
 				len(batchArgs)+4,
 				len(batchArgs)+5,
+				len(batchArgs)+6,
+				len(batchArgs)+7,
 			))
-			batchArgs = append(batchArgs, t.Timestamp, t.Name, t.Artist, t.Album, t.Played)
+			batchArgs = append(
+				batchArgs,
+				userId,
+				t.Timestamp,
+				t.Name,
+				t.Artist,
+				t.Album,
+				t.Played,
+				"spotify",
+			)
 		}
 
 		if len(batchValues) == 0 {
@@ -177,9 +204,12 @@ func JsonToDB(jsonFile string) error {
 
 		_, err = conn.Exec(
 			context.Background(),
-			`INSERT INTO history (timestamp, song_name, artist, album_name, ms_played) VALUES `+
-				strings.Join(batchValues, ", ")+
-				` ON CONFLICT DO NOTHING;`,
+			`INSERT INTO history (user_id, timestamp, song_name, artist, album_name, ms_played, platform) VALUES `+
+				strings.Join(
+					batchValues,
+					", ",
+				)+
+				` ON CONFLICT ON CONSTRAINT history_user_id_song_name_artist_timestamp_key DO NOTHING;`,
 			batchArgs...,
 		)
 		if err != nil {
@@ -193,7 +223,7 @@ func JsonToDB(jsonFile string) error {
 	return nil
 }
 
-func AddDirToDB(path string) error {
+func AddDirToDB(path string, userId int) error {
 	dirs, err := os.ReadDir(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error while reading path: %s: %v\n", path, err)
@@ -215,12 +245,11 @@ func AddDirToDB(path string) error {
 			if !strings.Contains(jsonFileName, ".json") {
 				continue
 			}
-			// prevents parsing spotify video data that causes duplicates
 			if strings.Contains(jsonFileName, "Video") {
 				continue
 			}
 			jsonFilePath := filepath.Join(subPath, jsonFileName)
-			err = JsonToDB(jsonFilePath)
+			err = JsonToDB(jsonFilePath, userId)
 			if err != nil {
 				fmt.Fprintf(os.Stderr,
 					"Error adding json data (%s) to muzi database: %v", jsonFilePath, err)
@@ -231,7 +260,7 @@ func AddDirToDB(path string) error {
 	return nil
 }
 
-func ImportSpotify() error {
+func ImportSpotify(userId int) error {
 	path := filepath.Join(".", "imports", "spotify", "zip")
 	targetBase := filepath.Join(".", "imports", "spotify", "extracted")
 	entries, err := os.ReadDir(path)
@@ -258,7 +287,7 @@ func ImportSpotify() error {
 			return err
 		}
 	}
-	err = AddDirToDB(targetBase)
+	err = AddDirToDB(targetBase, userId)
 	if err != nil {
 		fmt.Fprintf(os.Stderr,
 			"Error adding directory of data (%s) to muzi database: %v\n",
