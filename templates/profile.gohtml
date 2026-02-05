@@ -1,12 +1,22 @@
 <!doctype html>
 <html>
   <head>
-    <link rel="stylesheet" href="static/style.css" type="text/css">
+    <link rel="stylesheet" href="/files/style.css" type="text/css">
     <title>
       muzi | {{.Username}}'s Profile
     </title>
   </head>
   <body>
-    {{.Bio}}
+    <div class="profile-top">
+      <img src="{{.Pfp}}" alt="{{.Username}}'s avatar">
+      <div class="username-bio">
+        <h1>{{.Username}}</h1>
+        <h2>{{.Bio}}</h2>
+      </div>
+      <div class="user-stats-top">
+        <h3>101238 Listens</h3>
+        <h3>1298 Artists</h3>
+      </div>
+    </div>
   </body>
 </html>

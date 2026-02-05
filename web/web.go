@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"muzi/importsongs"
+
+	"muzi/migrate"
+
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/go-chi/chi/v5"
@@ -24,7 +26,6 @@ type PageData struct {
 	Page    int
 }
 
-
 func Sub(a int, b int) int {
 	return a - b
 }
@@ -35,7 +36,12 @@ func Add(a int, b int) int {
 
 func getTimes(conn *pgx.Conn, lim int, off int) []string {
 	var times []string
-	rows, err := conn.Query(context.Background(), "SELECT timestamp FROM history ORDER BY timestamp DESC LIMIT $1 OFFSET $2;", lim, off)
+	rows, err := conn.Query(
+		context.Background(),
+		"SELECT timestamp FROM history ORDER BY timestamp DESC LIMIT $1 OFFSET $2;",
+		lim,
+		off,
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "SELECT COUNT failed: %v\n", err)
 		return nil
@@ -54,7 +60,12 @@ func getTimes(conn *pgx.Conn, lim int, off int) []string {
 
 func getTitles(conn *pgx.Conn, lim int, off int) []string {
 	var titles []string
-	rows, err := conn.Query(context.Background(), "SELECT song_name FROM history ORDER BY timestamp DESC LIMIT $1 OFFSET $2;", lim, off)
+	rows, err := conn.Query(
+		context.Background(),
+		"SELECT song_name FROM history ORDER BY timestamp DESC LIMIT $1 OFFSET $2;",
+		lim,
+		off,
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "SELECT COUNT failed: %v\n", err)
 		return nil
@@ -73,7 +84,12 @@ func getTitles(conn *pgx.Conn, lim int, off int) []string {
 
 func getArtists(conn *pgx.Conn, lim int, off int) []string {
 	var artists []string
-	rows, err := conn.Query(context.Background(), "SELECT artist FROM history ORDER BY timestamp DESC LIMIT $1 OFFSET $2;", lim, off)
+	rows, err := conn.Query(
+		context.Background(),
+		"SELECT artist FROM history ORDER BY timestamp DESC LIMIT $1 OFFSET $2;",
+		lim,
+		off,
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "SELECT COUNT failed: %v\n", err)
 		return nil
@@ -118,7 +134,10 @@ func verifyPassword(hashedPassword string, enteredPassword []byte) bool {
 }
 
 func createAccount(w http.ResponseWriter, r *http.Request) {
-	conn, err := pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/muzi")
+	conn, err := pgx.Connect(
+		context.Background(),
+		"postgres://postgres:postgres@localhost:5432/muzi",
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
 		return
@@ -131,47 +150,62 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 		username := r.FormValue("uname")
 		hashedPassword := hashPassword([]byte(r.FormValue("pass")))
 
-	if importsongs.TableExists("users", conn) == false {
-		_, err = conn.Exec(
-			context.Background(),
-			`CREATE TABLE users (username TEXT, password TEXT, pk SERIAL, PRIMARY KEY (pk));`,
-		)
-		if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot create users table: %v\n", err)
-			panic(err)
+		if !migrate.TableExists("users", conn) {
+			_, err = conn.Exec(
+				context.Background(),
+				`CREATE TABLE users (
+					username TEXT,
+					password TEXT,
+					bio TEXT,
+					pfp TEXT,
+					pk SERIAL,
+					PRIMARY KEY (pk)
+				);`,
+			)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot create users table: %v\n", err)
+				panic(err)
+			}
 		}
-	}
 
 		_, err = conn.Exec(
-				context.Background(), `INSERT INTO users (username, password) VALUES ($1, $2);`,
-				username,
-				hashedPassword,
-			)
+			context.Background(),
+			`INSERT INTO users (username, password, bio, pfp) VALUES ($1, $2, $3, $4);`,
+			username,
+			hashedPassword,
+			"This profile has no bio.",
+			"/files/assets/default.png",
+		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot add new user to users table: %v\n", err)
 			http.Redirect(w, r, "/createaccount", http.StatusSeeOther)
 		} else {
-			http.Redirect(w, r, "/profile/" + username, http.StatusSeeOther)
+			http.Redirect(w, r, "/profile/"+username, http.StatusSeeOther)
 		}
 	}
 }
 
-func createAccountHandler(w http.ResponseWriter, r *http.Request) {
-	tmp, err := template.New("create_account.gohtml").ParseFiles("./templates/create_account.gohtml")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = tmp.Execute(w, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+func createAccountPageHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tmp, err := template.New("create_account.gohtml").
+			ParseFiles("./templates/create_account.gohtml")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err = tmp.Execute(w, nil)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
 func loginSubmit(w http.ResponseWriter, r *http.Request) {
-	conn, err := pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/muzi")
+	conn, err := pgx.Connect(
+		context.Background(),
+		"postgres://postgres:postgres@localhost:5432/muzi",
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
 		return
@@ -180,38 +214,52 @@ func loginSubmit(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "POST" {
 		r.ParseForm()
-		
+
 		username := r.FormValue("uname")
 		password := r.FormValue("pass")
 		var storedPassword string
-		err := conn.QueryRow(context.Background(), "SELECT password FROM users WHERE username = $1;", username).Scan(&storedPassword)
+		err := conn.QueryRow(context.Background(), "SELECT password FROM users WHERE username = $1;", username).
+			Scan(&storedPassword)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot get password for entered username: %v\n", err)
 		}
 
 		if verifyPassword(storedPassword, []byte(password)) {
-			http.Redirect(w, r, "/profile/" + username, http.StatusSeeOther)
+			http.Redirect(w, r, "/profile/"+username, http.StatusSeeOther)
+		} else {
+			http.Redirect(w, r, "/login?error=1", http.StatusSeeOther)
 		}
 	}
 }
 
-func loginPage(w http.ResponseWriter, r *http.Request) {
-	tmp, err := template.New("login.gohtml").ParseFiles("./templates/login.gohtml")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+func loginPageHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		type data struct {
+			ShowError bool
+		}
+		d := data{ShowError: false}
+		if r.URL.Query().Get("error") != "" {
+			d.ShowError = true
+		}
+		tmp, err := template.New("login.gohtml").ParseFiles("./templates/login.gohtml")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-	err = tmp.Execute(w, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		err = tmp.Execute(w, d)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
 func historyPage(w http.ResponseWriter, r *http.Request) {
-
-	conn, err := pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/muzi")
+	conn, err := pgx.Connect(
+		context.Background(),
+		"postgres://postgres:postgres@localhost:5432/muzi",
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
 		return
@@ -242,12 +290,14 @@ func historyPage(w http.ResponseWriter, r *http.Request) {
 		Page:    pageInt,
 	}
 
-funcMap := template.FuncMap{
-	"Sub": Sub,
-	"Add": Add,
-}
+	funcMap := template.FuncMap{
+		"Sub": Sub,
+		"Add": Add,
+	}
 
-	tmp, err := template.New("history.gohtml").Funcs(funcMap).ParseFiles("./templates/history.gohtml")
+	tmp, err := template.New("history.gohtml").
+		Funcs(funcMap).
+		ParseFiles("./templates/history.gohtml")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -260,29 +310,34 @@ funcMap := template.FuncMap{
 	}
 }
 
-type Profile struct {
-	Username string
-	Bio string
-}
-
-func Start() {
-	addr := ":1234"
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Get("/static/style.css", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./static/style.css")
-	})
-	r.Get("/history", historyPage)
-	r.Get("/login", loginPage)
-	r.Get("/createaccount", createAccountHandler)
-	// TODO: clean this up
-	r.Get("/profile/{username}", func(w http.ResponseWriter, r *http.Request) {
+func profilePageHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		username := chi.URLParam(r, "username")
-		
-		profileData := Profile {
-			Username: username,
-			Bio: "default",
+
+		conn, err := pgx.Connect(
+			context.Background(),
+			"postgres://postgres:postgres@localhost:5432/muzi",
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
+		defer conn.Close(context.Background())
+
+		var profileData Profile
+
+		err = conn.QueryRow(
+			context.Background(),
+			"SELECT bio, pfp FROM users WHERE username = $1;",
+			username,
+		).Scan(&profileData.Bio, &profileData.Pfp)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot get profile for %s: %v\n", username, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		profileData.Username = username
 
 		tmp, err := template.ParseFiles("./templates/profile.gohtml")
 		if err != nil {
@@ -290,7 +345,24 @@ func Start() {
 			return
 		}
 		tmp.Execute(w, profileData)
-	})
+	}
+}
+
+type Profile struct {
+	Username string
+	Bio      string
+	Pfp      string
+}
+
+func Start() {
+	addr := ":1234"
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(http.Dir("./static"))))
+	r.Get("/history", historyPage)
+	r.Get("/login", loginPageHandler())
+	r.Get("/createaccount", createAccountPageHandler())
+	r.Get("/profile/{username}", profilePageHandler())
 	r.Post("/loginsubmit", loginSubmit)
 	r.Post("/createaccountsubmit", createAccount)
 	fmt.Printf("WebUI starting on %s\n", addr)

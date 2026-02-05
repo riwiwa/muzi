@@ -6,13 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"muzi/importsongs"
+	"muzi/migrate"
 	"muzi/web"
 )
 
 func dbCheck() error {
-	if !importsongs.DbExists() {
-		err := importsongs.CreateDB()
+	if !migrate.DbExists() {
+		err := migrate.CreateDB()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating muzi DB: %v\n", err)
 			return err
@@ -70,12 +70,12 @@ func main() {
 
 	username := ""
 	apiKey := ""
-	fmt.Printf("Importing LastFM data for %s", username)
-	err = importsongs.ImportLastFM(username, apiKey)
+	fmt.Printf("Importing LastFM data for %s\n", username)
+	err = migrate.ImportLastFM(username, apiKey)
 	if err != nil {
 		return
 	}
-	err = importsongs.ImportSpotify()
+	err = migrate.ImportSpotify()
 	if err != nil {
 		return
 	}

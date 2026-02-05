@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
   <head>
-    <link rel="stylesheet" href="static/style.css" type="text/css">
+    <link rel="stylesheet" href="/files/style.css" type="text/css">
     <title>
       muzi | Login
     </title>
@@ -14,6 +14,11 @@
         <label for="pass">Password:</label>
         <input type="text" id="pass" name="pass"> <br> <br>
         <input type="submit" value="Login">
+        {{if .ShowError}}
+          <div class="login-error">
+            Invalid credentials. Please try again.
+          </div>
+        {{end}}
       </form>
     </div>
   </body>
