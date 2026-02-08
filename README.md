@@ -8,7 +8,7 @@
 ### Roadmap:
 - Ability to import all listening statistics and scrobbles from: \[In Progress\]
     - LastFM \[Complete\]
-    - Spotify \[Complete\]
+    - Spotify \[In Progress\]
     - Apple Music \[Planned\]
 
 - WebUI \[In Progress\]
