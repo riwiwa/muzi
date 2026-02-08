@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -136,12 +137,16 @@ func getUserIdByUsername(ctx context.Context, username string) (int, error) {
 	return userId, err
 }
 
-func hashPassword(pass []byte) string {
+func hashPassword(pass []byte) (string, error) {
+	if len(pass) < 8 || len(pass) > 64 {
+		return "", errors.New("Error: Password must be greater than 8 chars.")
+	}
 	hashedPassword, err := bcrypt.GenerateFromPassword(pass, bcrypt.DefaultCost)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Couldn't hash password: %v\n", err)
+		return "", err
 	}
-	return string(hashedPassword)
+	return string(hashedPassword), nil
 }
 
 func verifyPassword(hashedPassword string, enteredPassword []byte) bool {
@@ -158,9 +163,14 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 
 		username := r.FormValue("uname")
-		hashedPassword := hashPassword([]byte(r.FormValue("pass")))
+		hashedPassword, err := hashPassword([]byte(r.FormValue("pass")))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error hashing password: %v\n", err)
+			http.Redirect(w, r, "/createaccount?error=length", http.StatusSeeOther)
+			return
+		}
 
-		err := db.CreateUsersTable()
+		err = db.CreateUsersTable()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error ensuring users table exists: %v\n", err)
 			http.Redirect(w, r, "/createaccount", http.StatusSeeOther)
@@ -179,7 +189,7 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 		} else {
 			sessionID := createSession(username)
 			if sessionID == "" {
-				http.Redirect(w, r, "/login?error=2", http.StatusSeeOther)
+				http.Redirect(w, r, "/login?error=session", http.StatusSeeOther)
 				return
 			}
 			http.SetCookie(w, &http.Cookie{
@@ -196,7 +206,11 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 
 func createAccountPageHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := templates.ExecuteTemplate(w, "create_account.gohtml", nil)
+		type data struct {
+			Error string
+		}
+		d := data{Error: "len"}
+		err := templates.ExecuteTemplate(w, "create_account.gohtml", d)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -219,7 +233,7 @@ func loginSubmit(w http.ResponseWriter, r *http.Request) {
 		if verifyPassword(storedPassword, []byte(password)) {
 			sessionID := createSession(username)
 			if sessionID == "" {
-				http.Redirect(w, r, "/login?error=2", http.StatusSeeOther)
+				http.Redirect(w, r, "/login?error=session", http.StatusSeeOther)
 				return
 			}
 			http.SetCookie(w, &http.Cookie{
@@ -231,7 +245,7 @@ func loginSubmit(w http.ResponseWriter, r *http.Request) {
 			})
 			http.Redirect(w, r, "/profile/"+username, http.StatusSeeOther)
 		} else {
-			http.Redirect(w, r, "/login?error=1", http.StatusSeeOther)
+			http.Redirect(w, r, "/login?error=invalid-creds", http.StatusSeeOther)
 		}
 	}
 }

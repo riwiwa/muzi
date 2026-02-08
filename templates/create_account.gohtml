@@ -14,6 +14,16 @@
         <label for="pass">Password:</label>
         <input type="password" id="pass" name="pass"> <br> <br>
         <input type="submit" value="Create Account">
+        {{if eq .Error "length"}}
+          <div class="login-error">
+            Password must be 8-64 chars (inclusive).
+          </div>
+        {{end}}
+        {{if eq .Error "session"}}
+          <div class="login-error">
+            Unable to create session. Please try again.
+          </div>
+        {{end}}
       </form>
     </div>
   </body>
