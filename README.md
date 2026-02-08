@@ -2,7 +2,7 @@
 ## Self-hosted music listening statistics
 
 ### Requirements
-- Go 1.25.4+
+- Go 1.25+
 - PostgreSQL
 
 ### Roadmap:
