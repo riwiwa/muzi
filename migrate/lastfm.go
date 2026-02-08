@@ -81,7 +81,11 @@ func ImportLastFM(
 
 	totalImported := 0
 
-	resp, err := http.Get(
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Get(
 		"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" +
 			username + "&api_key=" + apiKey + "&format=json&limit=100",
 	)
@@ -124,7 +128,7 @@ func ImportLastFM(
 		go func(workerID int) {
 			defer wg.Done()
 			for page := workerID + 1; page <= totalPages; page += 10 {
-				resp, err := http.Get(
+				resp, err := client.Get(
 					"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" +
 						username + "&api_key=" + apiKey + "&format=json&limit=100&page=" + strconv.Itoa(page),
 				)
