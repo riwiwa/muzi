@@ -107,7 +107,12 @@ func getExistingTracks(conn *pgx.Conn, userId int, tracks []SpotifyTrack) (map[s
 					diff = -diff
 				}
 				if diff < 20*time.Second {
-					key := fmt.Sprintf("%s|%s|%s", newTrack.Artist, newTrack.Name, newTrack.Timestamp)
+					key := fmt.Sprintf(
+						"%s|%s|%s",
+						newTrack.Artist,
+						newTrack.Name,
+						newTrack.Timestamp,
+					)
 					existing[key] = true
 					break
 				}
@@ -269,12 +274,13 @@ func ImportSpotify(userId int) error {
 		return err
 	}
 	for _, f := range entries {
-		_, err := zip.OpenReader(filepath.Join(path, f.Name()))
+		reader, err := zip.OpenReader(filepath.Join(path, f.Name()))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error opening zip: %s: %v\n",
 				filepath.Join(path, f.Name()), err)
 			continue
 		}
+		defer reader.Close()
 		fileName := f.Name()
 		fileFullPath := filepath.Join(path, fileName)
 		fileBaseName := fileName[:(strings.LastIndex(fileName, "."))]
@@ -339,11 +345,13 @@ func Extract(path string, target string) error {
 			fmt.Fprintf(os.Stderr, "Error opening file: %s: %v\n", filePath, err)
 			return err
 		}
+		defer fileToExtract.Close()
 		extractedFile, err := f.Open()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error opening file: %s: %v\n", f.Name, err)
 			return err
 		}
+		defer extractedFile.Close()
 		if _, err := io.Copy(fileToExtract, extractedFile); err != nil {
 			fmt.Fprintf(
 				os.Stderr,
@@ -354,8 +362,6 @@ func Extract(path string, target string) error {
 			)
 			return err
 		}
-		fileToExtract.Close()
-		extractedFile.Close()
 	}
 	return nil
 }
