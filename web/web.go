@@ -43,15 +43,22 @@ func init() {
 	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("./templates/*.gohtml"))
 }
 
-func generateID() string {
+func generateID() (string, error) {
 	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func createSession(username string) string {
-	sessionID := generateID()
-	_, err := db.Pool.Exec(
+	sessionID, err := generateID()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error generating sessionID: %v\n", err)
+		return ""
+	}
+	_, err = db.Pool.Exec(
 		context.Background(),
 		"INSERT INTO sessions (session_id, username, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days');",
 		sessionID,
@@ -409,7 +416,12 @@ func importLastFMHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobID := generateID()
+	jobID, err := generateID()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error generating jobID: %v\n", err)
+		http.Error(w, "Error generating jobID", http.StatusBadRequest)
+		return
+	}
 	progressChan := make(chan migrate.ProgressUpdate, 100)
 
 	jobsMu.Lock()
