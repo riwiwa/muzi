@@ -6,39 +6,23 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func TableExists(name string, conn *pgx.Conn) bool {
-	var exists bool
-	err := conn.QueryRow(
-		context.Background(),
-		`SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND 
-		tablename = $1);`,
-		name,
-	).
-		Scan(&exists)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "SELECT EXISTS failed: %v\n", err)
-		return false
-	}
-	return exists
-}
+var Pool *pgxpool.Pool
 
-func DbExists() bool {
-	conn, err := pgx.Connect(
-		context.Background(),
-		"postgres://postgres:postgres@localhost:5432/muzi",
-	)
-	if err != nil {
-		return false
+func CreateAllTables() error {
+	if err := CreateHistoryTable(); err != nil {
+		return err
 	}
-	defer conn.Close(context.Background())
-	return true
+	if err := CreateUsersTable(); err != nil {
+		return err
+	}
+	return CreateSessionsTable()
 }
 
 func CreateDB() error {
-	conn, err := pgx.Connect(
-		context.Background(),
+	conn, err := pgx.Connect(context.Background(),
 		"postgres://postgres:postgres@localhost:5432",
 	)
 	if err != nil {
@@ -46,16 +30,29 @@ func CreateDB() error {
 		return err
 	}
 	defer conn.Close(context.Background())
+
+	var exists bool
+	err = conn.QueryRow(context.Background(),
+		"SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = 'muzi')").Scan(&exists)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error checking if database exists: %v\n", err)
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
 	_, err = conn.Exec(context.Background(), "CREATE DATABASE muzi")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot create muzi database: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error creating muzi database: %v\n", err)
 		return err
 	}
 	return nil
 }
 
-func CreateHistoryTable(conn *pgx.Conn) error {
-	_, err := conn.Exec(context.Background(),
+func CreateHistoryTable() error {
+	_, err := Pool.Exec(context.Background(),
 		`CREATE TABLE IF NOT EXISTS history (
 			id SERIAL PRIMARY KEY,
 			user_id INTEGER NOT NULL,
@@ -64,7 +61,7 @@ func CreateHistoryTable(conn *pgx.Conn) error {
 			artist TEXT NOT NULL,
 			album_name TEXT,
 			ms_played INTEGER,
-			platform TEXT DEFAULT 'spotify',
+			platform TEXT,
 			UNIQUE (user_id, song_name, artist, timestamp)
 		);
 		CREATE INDEX IF NOT EXISTS idx_history_user_timestamp ON history(user_id, timestamp DESC);
@@ -77,10 +74,11 @@ func CreateHistoryTable(conn *pgx.Conn) error {
 	return nil
 }
 
-func CreateUsersTable(conn *pgx.Conn) error {
-	_, err := conn.Exec(context.Background(),
+// TODO: move user settings to jsonb in db
+func CreateUsersTable() error {
+	_, err := Pool.Exec(context.Background(),
 		`CREATE TABLE IF NOT EXISTS users (
-			username TEXT NOT NULL,
+			username TEXT NOT NULL UNIQUE,
 			password TEXT NOT NULL,
 			bio TEXT DEFAULT 'This profile has no bio.',
 			pfp TEXT DEFAULT '/files/assets/default.png',
@@ -89,6 +87,32 @@ func CreateUsersTable(conn *pgx.Conn) error {
 		);`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating users table: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func CreateSessionsTable() error {
+	_, err := Pool.Exec(context.Background(),
+		`CREATE TABLE IF NOT EXISTS sessions (
+			session_id TEXT PRIMARY KEY,
+			username TEXT NOT NULL REFERENCES users(username),
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '30 days'
+		);
+		CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating sessions table: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func CleanupExpiredSessions() error {
+	_, err := Pool.Exec(context.Background(),
+		"DELETE FROM sessions WHERE expires_at < NOW();")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error cleaning up expired sessions: %v\n", err)
 		return err
 	}
 	return nil

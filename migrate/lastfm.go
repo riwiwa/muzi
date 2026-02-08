@@ -28,6 +28,15 @@ type pageResult struct {
 	err     error
 }
 
+type ProgressUpdate struct {
+	CurrentPage    int    `json:"current_page"`
+	CompletedPages int    `json:"completed_pages"`
+	TotalPages     int    `json:"total_pages"`
+	TracksImported int    `json:"tracks_imported"`
+	Status         string `json:"status"`
+	Error          string `json:"error,omitempty"`
+}
+
 type Response struct {
 	Recenttracks struct {
 		Track []struct {
@@ -51,13 +60,21 @@ type Response struct {
 	} `json:"recenttracks"`
 }
 
-func ImportLastFM(username string, apiKey string, userId int) error {
+func ImportLastFM(
+	username string,
+	apiKey string,
+	userId int,
+	progressChan chan<- ProgressUpdate,
+) error {
 	conn, err := pgx.Connect(
 		context.Background(),
 		"postgres://postgres:postgres@localhost:5432/muzi",
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot connect to muzi database: %v\n", err)
+		if progressChan != nil {
+			progressChan <- ProgressUpdate{Status: "error", Error: err.Error()}
+		}
 		return err
 	}
 	defer conn.Close(context.Background())
@@ -70,6 +87,9 @@ func ImportLastFM(username string, apiKey string, userId int) error {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting LastFM HTTP response: %v\n", err)
+		if progressChan != nil {
+			progressChan <- ProgressUpdate{Status: "error", Error: err.Error()}
+		}
 		return err
 	}
 	var initialData Response
@@ -78,9 +98,20 @@ func ImportLastFM(username string, apiKey string, userId int) error {
 	resp.Body.Close()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing total pages: %v\n", err)
+		if progressChan != nil {
+			progressChan <- ProgressUpdate{Status: "error", Error: err.Error()}
+		}
 		return err
 	}
 	fmt.Printf("Total pages: %d\n", totalPages)
+
+	// send initial progress update
+	if progressChan != nil {
+		progressChan <- ProgressUpdate{
+			TotalPages: totalPages,
+			Status:     "running",
+		}
+	}
 
 	trackBatch := make([]LastFMTrack, 0, 1000)
 
@@ -137,6 +168,8 @@ func ImportLastFM(username string, apiKey string, userId int) error {
 	}()
 
 	batchSize := 500
+	completedPages := 0
+	var completedMu sync.Mutex
 
 	for result := range pageChan {
 		if result.err != nil {
@@ -153,6 +186,23 @@ func ImportLastFM(username string, apiKey string, userId int) error {
 			}
 		}
 		fmt.Printf("Processed page %d/%d\n", result.pageNum, totalPages)
+
+		// increment completed pages counter
+		completedMu.Lock()
+		completedPages++
+		currentCompleted := completedPages
+		completedMu.Unlock()
+
+		// send progress update after each page
+		if progressChan != nil {
+			progressChan <- ProgressUpdate{
+				CurrentPage:    result.pageNum,
+				CompletedPages: currentCompleted,
+				TotalPages:     totalPages,
+				TracksImported: totalImported,
+				Status:         "running",
+			}
+		}
 	}
 
 	if len(trackBatch) > 0 {
@@ -163,6 +213,17 @@ func ImportLastFM(username string, apiKey string, userId int) error {
 	}
 
 	fmt.Printf("%d tracks imported from LastFM for user %s\n", totalImported, username)
+
+	// send completion update
+	if progressChan != nil {
+		progressChan <- ProgressUpdate{
+			CurrentPage:    totalPages,
+			TotalPages:     totalPages,
+			TracksImported: totalImported,
+			Status:         "completed",
+		}
+	}
+
 	return nil
 }
 

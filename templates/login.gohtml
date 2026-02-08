@@ -14,9 +14,14 @@
         <label for="pass">Password:</label>
         <input type="password" id="pass" name="pass"> <br> <br>
         <input type="submit" value="Login">
-        {{if .ShowError}}
+        {{if eq .Error "1"}}
           <div class="login-error">
             Invalid credentials. Please try again.
+          </div>
+        {{end}}
+        {{if eq .Error "2"}}
+          <div class="login-error">
+            Unable to create session. Please try again.
           </div>
         {{end}}
       </form>
