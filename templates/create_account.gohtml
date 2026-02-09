@@ -24,6 +24,16 @@
             Unable to create session. Please try again.
           </div>
         {{end}}
+        {{if eq .Error "userlength"}}
+          <div class="login-error">
+            Username length must be greater than 0.
+          </div>
+        {{end}}
+        {{if eq .Error "usertaken"}}
+          <div class="login-error">
+            Username must be unique. Please try again.
+          </div>
+        {{end}}
       </form>
     </div>
   </body>

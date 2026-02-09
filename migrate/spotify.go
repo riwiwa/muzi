@@ -207,6 +207,8 @@ func JsonToDB(jsonFile string, userId int) error {
 			continue
 		}
 
+		// TODO: replace strings.Join with pgx copy
+
 		_, err = conn.Exec(
 			context.Background(),
 			`INSERT INTO history (user_id, timestamp, song_name, artist, album_name, ms_played, platform) VALUES `+
