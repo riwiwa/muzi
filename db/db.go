@@ -21,9 +21,18 @@ func CreateAllTables() error {
 	return CreateSessionsTable()
 }
 
+func GetDbUrl() string {
+	host := os.Getenv("PGHOST")
+	port := os.Getenv("PGPORT")
+	user := os.Getenv("PGUSER")
+	pass := os.Getenv("PGPASSWORD")
+
+	return fmt.Sprintf("postgres://%s:%s@%s:%s", user, pass, host, port)
+}
+
 func CreateDB() error {
 	conn, err := pgx.Connect(context.Background(),
-		"postgres://postgres:postgres@localhost:5432",
+		GetDbUrl(),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot connect to PostgreSQL: %v\n", err)
