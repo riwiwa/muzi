@@ -97,10 +97,11 @@ func fetchPage(client *http.Client, page int, lfmUsername, apiKey string, userId
 }
 
 func ImportLastFM(
-	username string,
+	lfmUsername string,
 	apiKey string,
 	userId int,
 	progressChan chan<- ProgressUpdate,
+	username string,
 ) error {
 	totalImported := 0
 
@@ -110,7 +111,7 @@ func ImportLastFM(
 
 	resp, err := client.Get(
 		"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=" +
-			username + "&api_key=" + apiKey + "&format=json&limit=100",
+			lfmUsername + "&api_key=" + apiKey + "&format=json&limit=100",
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting LastFM HTTP response: %v\n", err)
@@ -135,7 +136,8 @@ func ImportLastFM(
 		}
 		return err
 	}
-	fmt.Printf("Total pages: %d\n", totalPages)
+	fmt.Printf("%s started a LastFM import job of %d total pages\n", username,
+		totalPages)
 
 	// send initial progress update
 	if progressChan != nil {
@@ -215,7 +217,10 @@ func ImportLastFM(
 		}
 	}
 
-	fmt.Printf("%d tracks imported from LastFM for user %s\n", totalImported, username)
+	fmt.Printf("User %s imported %d tracks from LastFM account %s\n",
+		username,
+		totalImported,
+		lfmUsername)
 
 	// send completion update
 	if progressChan != nil {

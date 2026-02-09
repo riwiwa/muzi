@@ -433,7 +433,8 @@ func importLastFMHandler(w http.ResponseWriter, r *http.Request) {
 	jobsMu.Unlock()
 
 	go func() {
-		migrate.ImportLastFM(lastfmUsername, lastfmAPIKey, userId, progressChan)
+		migrate.ImportLastFM(lastfmUsername, lastfmAPIKey, userId, progressChan,
+			username)
 
 		jobsMu.Lock()
 		delete(importJobs, jobID)
