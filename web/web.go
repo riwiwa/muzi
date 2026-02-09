@@ -204,6 +204,8 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 				Value:    sessionID,
 				Path:     "/",
 				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
 				MaxAge:   86400 * 30, // 30 days
 			})
 			http.Redirect(w, r, "/profile/"+username, http.StatusSeeOther)
@@ -248,6 +250,8 @@ func loginSubmit(w http.ResponseWriter, r *http.Request) {
 				Value:    sessionID,
 				Path:     "/",
 				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
 				MaxAge:   86400 * 30, // 30 days
 			})
 			http.Redirect(w, r, "/profile/"+username, http.StatusSeeOther)
@@ -503,5 +507,6 @@ func Start() {
 	r.Post("/import/lastfm", importLastFMHandler)
 	r.Get("/import/lastfm/progress", importLastFMProgressHandler)
 	fmt.Printf("WebUI starting on %s\n", addr)
-	http.ListenAndServe(addr, r)
+	prot := http.NewCrossOriginProtection()
+	http.ListenAndServe(addr, prot.Handler(r))
 }
