@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+  <head>
+    <link rel="stylesheet" href="/files/style.css" type="text/css">
+    <title>muzi | Import Data</title>
+    <style>
+      /* Debug: Force bar visibility */
+      #progress-fill {
+        background: linear-gradient(90deg, #0f0, #0a0) !important;
+        min-width: 2px !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="import-container">
+      <h1>Import Your Listening Data</h1>
+      <p>Welcome, {{.Username}}!</p>
+      
+      <div class="import-section">
+        <h2>Spotify</h2>
+        <p>Import your Spotify listening history from your data export.</p>
+        <form method="POST" action="/import/spotify" enctype="multipart/form-data">
+          <input type="file" name="json_files" accept=".json,application/json" multiple required>
+          <button type="submit">Upload Spotify Data</button>
+        </form>
+      </div>
+      
+      <div class="import-section">
+        <h2>Last.fm</h2>
+        <p>Import your Last.fm scrobbles.</p>
+        <form id="lastfm-form" method="POST" action="/import/lastfm">
+          <input type="text" name="lastfm_username" placeholder="Last.FM Username" required>
+          <input type="text" name="lastfm_api_key" placeholder="Last.FM API Key" required>
+          <button type="submit">Import from Last.fm</button>
+        </form>
+        
+        <div id="lastfm-progress" class="progress-container" style="display: none;">
+          <div class="progress-status" id="progress-status">Initializing...</div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar-fill" id="progress-fill"></div>
+            <div class="progress-text" id="progress-text">0%</div>
+          </div>
+          <div class="progress-tracks" id="progress-tracks"></div>
+          <div class="progress-error" id="progress-error"></div>
+          <div class="progress-success" id="progress-success"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById('lastfm-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const form = e.target;
+        const formData = new FormData(form);
+        const progressContainer = document.getElementById('lastfm-progress');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const progressStatus = document.getElementById('progress-status');
+        const progressTracks = document.getElementById('progress-tracks');
+        const progressError = document.getElementById('progress-error');
+        const progressSuccess = document.getElementById('progress-success');
+        
+        // Reset and show progress container
+        progressFill.style.width = '0%';
+        progressFill.classList.add('animating');
+        progressText.textContent = '0%';
+        progressStatus.textContent = 'Starting import...';
+        progressTracks.textContent = '';
+        progressError.textContent = '';
+        progressSuccess.textContent = '';
+        progressContainer.style.display = 'block';
+        
+        try {
+          // Convert FormData to URLSearchParams for proper form encoding
+          const params = new URLSearchParams();
+          for (const [key, value] of formData) {
+            params.append(key, value);
+          }
+          
+          // Start the import
+          const response = await fetch('/import/lastfm', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to start import: ' + response.statusText);
+          }
+          
+          const data = await response.json();
+          const jobId = data.job_id;
+          
+          // Connect to SSE endpoint
+          const eventSource = new EventSource('/import/lastfm/progress?job=' + jobId);
+          
+          eventSource.onmessage = function(event) {
+            const update = JSON.parse(event.data);
+            
+            if (update.status === 'connected') {
+              return;
+            }
+            
+            if (update.total_pages > 0) {
+              const completed = update.completed_pages || update.current_page || 0;
+              const percent = Math.round((completed / update.total_pages) * 100);
+              progressFill.style.width = percent + '%';
+              progressText.textContent = percent + '%';
+              progressStatus.textContent = 'Processing page ' + completed + ' of ' + update.total_pages;
+            }
+            
+            if (update.tracks_imported !== undefined) {
+              progressTracks.textContent = update.tracks_imported.toLocaleString() + ' tracks imported';
+            }
+            
+            if (update.status === 'completed') {
+              progressFill.classList.remove('animating');
+              progressStatus.textContent = 'Import completed!';
+              progressSuccess.textContent = 'Successfully imported ' + update.tracks_imported.toLocaleString() + ' tracks from Last.fm';
+              eventSource.close();
+              form.reset();
+            } else if (update.status === 'error') {
+              progressFill.classList.remove('animating');
+              progressStatus.textContent = 'Import failed';
+              progressError.textContent = 'Error: ' + (update.error || 'Unknown error');
+              eventSource.close();
+            }
+          };
+          
+          eventSource.onerror = function(err) {
+            progressFill.classList.remove('animating');
+            progressStatus.textContent = 'Connection error';
+            progressError.textContent = 'Lost connection to server. The import may still be running in the background.';
+            eventSource.close();
+          };
+          
+        } catch (err) {
+          progressFill.classList.remove('animating');
+          progressStatus.textContent = 'Import failed';
+          progressError.textContent = 'Error: ' + err.message;
+        }
+      });
+    </script>
+  </body>
+</html>

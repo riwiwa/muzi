@@ -8,9 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"muzi/db"
@@ -22,6 +25,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgtype"
 )
+
+// 50 MB
+const maxHeaderSize int64 = 50 * 1024 * 1024
 
 // will add permissions later
 type Session struct {
@@ -413,6 +419,99 @@ func importPageHandler() http.HandlerFunc {
 	}
 }
 
+func checkUploads(uploads []*multipart.FileHeader, w http.ResponseWriter) []migrate.SpotifyTrack {
+	if len(uploads) < 1 {
+		http.Error(w, "No files uploaded", http.StatusBadRequest)
+		return nil
+	}
+
+	if len(uploads) > 30 {
+		http.Error(w, "Too many files uploaded (30 max)", http.StatusBadRequest)
+		return nil
+	}
+
+	var allTracks []migrate.SpotifyTrack
+
+	for _, u := range uploads {
+		if u.Size > maxHeaderSize {
+			fmt.Fprintf(os.Stderr, "File too large: %s\n", u.Filename)
+			continue
+		}
+
+		if strings.Contains(u.Filename, "..") ||
+			strings.Contains(u.Filename, "/") ||
+			strings.Contains(u.Filename, "\x00") {
+			fmt.Fprintf(os.Stderr, "Invalid filename: %s\n", u.Filename)
+			continue
+		}
+
+		file, err := u.Open()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening %s: %v\n", u.Filename, err)
+			continue
+		}
+
+		reader := io.LimitReader(file, maxHeaderSize)
+		data, err := io.ReadAll(reader)
+		file.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading %s: %v\n", u.Filename, err)
+			continue
+		}
+
+		if !json.Valid(data) {
+			http.Error(w, fmt.Sprintf("Invalid JSON in %s", u.Filename),
+				http.StatusBadRequest)
+			return nil
+		}
+
+		var tracks []migrate.SpotifyTrack
+		if err := json.Unmarshal(data, &tracks); err != nil {
+			fmt.Fprintf(os.Stderr,
+				"Error parsing %s: %v\n", u.Filename, err)
+			continue
+		}
+
+		allTracks = append(allTracks, tracks...)
+	}
+	return allTracks
+}
+
+func importSpotifyHandler(w http.ResponseWriter, r *http.Request) {
+	username := getLoggedInUsername(r)
+	if username == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userId, err := getUserIdByUsername(r.Context(), username)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot find user %s: %v\n", username, err)
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+	// 32MB memory max
+	err = r.ParseMultipartForm(32 << 20)
+	if err != nil {
+		http.Error(w, "Error parsing form", http.StatusBadRequest)
+		return
+	}
+
+	allTracks := checkUploads(r.MultipartForm.File["json_files"], w)
+	if allTracks == nil {
+		return
+	}
+
+	if err := migrate.ImportSpotify(allTracks, userId); err != nil {
+		http.Error(w, "Failed to process tracks", http.StatusInternalServerError)
+		return
+	}
+}
+
 func importLastFMHandler(w http.ResponseWriter, r *http.Request) {
 	username := getLoggedInUsername(r)
 	if username == "" {
@@ -531,6 +630,7 @@ func Start() {
 	r.Post("/createaccountsubmit", createAccount)
 	r.Post("/settings/duplicate-edits", updateDuplicateEditsSetting)
 	r.Post("/import/lastfm", importLastFMHandler)
+	r.Post("/import/spotify", importSpotifyHandler)
 	r.Get("/import/lastfm/progress", importLastFMProgressHandler)
 	fmt.Printf("WebUI starting on %s\n", addr)
 	prot := http.NewCrossOriginProtection()
