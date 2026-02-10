@@ -215,14 +215,24 @@ func isDuplicateWithinWindow(track SpotifyTrack, existingTimestamps []time.Time)
 	return false
 }
 
-func ImportSpotify(tracks []SpotifyTrack, userId int) error {
+func ImportSpotify(tracks []SpotifyTrack, userId int, progressChan chan ProgressUpdate) error {
 	totalImported := 0
 	totalTracks := len(tracks)
 	batchStart := 0
+	totalBatches := (totalTracks + batchSize - 1) / batchSize
+
+	// Send initial progress update
+	if progressChan != nil {
+		progressChan <- ProgressUpdate{
+			TotalPages: totalBatches,
+			Status:     "running",
+		}
+	}
 
 	for batchStart < totalTracks {
 		// cap batchEnd at total track count on final batch to prevent OOB error
 		batchEnd := min(batchStart+batchSize, totalTracks)
+		currentBatch := (batchStart / batchSize) + 1
 
 		var validTracks []SpotifyTrack
 		for i := batchStart; i < batchEnd; i++ {
@@ -235,6 +245,16 @@ func ImportSpotify(tracks []SpotifyTrack, userId int) error {
 
 		if len(validTracks) == 0 {
 			batchStart += batchSize
+			// Send progress update even for empty batches
+			if progressChan != nil {
+				progressChan <- ProgressUpdate{
+					CurrentPage:    currentBatch,
+					CompletedPages: currentBatch,
+					TotalPages:     totalBatches,
+					TracksImported: totalImported,
+					Status:         "running",
+				}
+			}
 			continue
 		}
 
@@ -273,7 +293,31 @@ func ImportSpotify(tracks []SpotifyTrack, userId int) error {
 		} else {
 			totalImported += int(copyCount)
 		}
+
+		// Send progress update
+		if progressChan != nil {
+			progressChan <- ProgressUpdate{
+				CurrentPage:    currentBatch,
+				CompletedPages: currentBatch,
+				TotalPages:     totalBatches,
+				TracksImported: totalImported,
+				Status:         "running",
+			}
+		}
+
 		batchStart += batchSize
 	}
+
+	// Send completion update
+	if progressChan != nil {
+		progressChan <- ProgressUpdate{
+			CurrentPage:    totalBatches,
+			CompletedPages: totalBatches,
+			TotalPages:     totalBatches,
+			TracksImported: totalImported,
+			Status:         "completed",
+		}
+	}
+
 	return nil
 }

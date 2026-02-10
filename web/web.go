@@ -506,10 +506,32 @@ func importSpotifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := migrate.ImportSpotify(allTracks, userId); err != nil {
-		http.Error(w, "Failed to process tracks", http.StatusInternalServerError)
+	jobID, err := generateID()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error generating jobID: %v\n", err)
+		http.Error(w, "Error generating jobID", http.StatusBadRequest)
 		return
 	}
+	progressChan := make(chan migrate.ProgressUpdate, 100)
+
+	jobsMu.Lock()
+	importJobs[jobID] = progressChan
+	jobsMu.Unlock()
+
+	go func() {
+		migrate.ImportSpotify(allTracks, userId, progressChan)
+
+		jobsMu.Lock()
+		delete(importJobs, jobID)
+		jobsMu.Unlock()
+		close(progressChan)
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"job_id": jobID,
+		"status": "started",
+	})
 }
 
 func importLastFMHandler(w http.ResponseWriter, r *http.Request) {
@@ -617,6 +639,50 @@ func importLastFMProgressHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func importSpotifyProgressHandler(w http.ResponseWriter, r *http.Request) {
+	jobID := r.URL.Query().Get("job")
+	if jobID == "" {
+		http.Error(w, "Missing job ID", http.StatusBadRequest)
+		return
+	}
+
+	jobsMu.RLock()
+	job, exists := importJobs[jobID]
+	jobsMu.RUnlock()
+
+	if !exists {
+		http.Error(w, "Job not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "data: %s\n\n", `{"status":"connected"}`)
+	flusher.Flush()
+
+	for update := range job {
+		data, err := json.Marshal(update)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "data: %s\n\n", string(data))
+		flusher.Flush()
+
+		if update.Status == "completed" || update.Status == "error" {
+			return
+		}
+	}
+}
+
 func Start() {
 	addr := ":1234"
 	r := chi.NewRouter()
@@ -632,6 +698,7 @@ func Start() {
 	r.Post("/import/lastfm", importLastFMHandler)
 	r.Post("/import/spotify", importSpotifyHandler)
 	r.Get("/import/lastfm/progress", importLastFMProgressHandler)
+	r.Get("/import/spotify/progress", importSpotifyProgressHandler)
 	fmt.Printf("WebUI starting on %s\n", addr)
 	prot := http.NewCrossOriginProtection()
 	http.ListenAndServe(addr, prot.Handler(r))
