@@ -21,23 +21,23 @@ func CreateAllTables() error {
 	return CreateSessionsTable()
 }
 
-func GetDbUrl(noDBName bool) string {
+func GetDbUrl(dbName bool) string {
 	host := os.Getenv("PGHOST")
 	port := os.Getenv("PGPORT")
 	user := os.Getenv("PGUSER")
 	pass := os.Getenv("PGPASSWORD")
-	db := os.Getenv("PGDATABASE")
 
-	if noDBName {
-		return fmt.Sprintf("postgres://%s:%s@%s:%s", user, pass, host, port)
+	if dbName {
+		return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+			user, pass, host, port, "muzi")
 	} else {
-		return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, pass, host, port, db)
+		return fmt.Sprintf("postgres://%s:%s@%s:%s", user, pass, host, port)
 	}
 }
 
 func CreateDB() error {
 	conn, err := pgx.Connect(context.Background(),
-		GetDbUrl(true),
+		GetDbUrl(false),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot connect to PostgreSQL: %v\n", err)

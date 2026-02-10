@@ -22,7 +22,7 @@ func main() {
 	check("ensuring muzi DB exists", db.CreateDB())
 
 	var err error
-	db.Pool, err = pgxpool.New(context.Background(), db.GetDbUrl(false))
+	db.Pool, err = pgxpool.New(context.Background(), db.GetDbUrl(true))
 	check("connecting to muzi database", err)
 	defer db.Pool.Close()
 
