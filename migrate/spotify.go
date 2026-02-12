@@ -10,6 +10,7 @@ package migrate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -335,19 +336,24 @@ func (s *trackSource) Err() error {
 	return nil
 }
 
-		batchStart += batchSize
+// Implements custom JSON unmarshaling to parse the timestamp
+func (s *SpotifyTrack) UnmarshalJSON(data []byte) error {
+	type Alias SpotifyTrack
+	aux := &struct {
+		Timestamp string `json:"ts"`
+		*Alias
+	}{
+		Alias: (*Alias)(s),
 	}
 
-	// Send completion update
-	if progressChan != nil {
-		progressChan <- ProgressUpdate{
-			CurrentPage:    totalBatches,
-			CompletedPages: totalBatches,
-			TotalPages:     totalBatches,
-			TracksImported: totalImported,
-			Status:         "completed",
-		}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
 	}
 
+	ts, err := time.Parse(time.RFC3339Nano, aux.Timestamp)
+	if err != nil {
+		return fmt.Errorf("parsing timestamp: %w", err)
+	}
+	s.Timestamp = ts
 	return nil
 }
