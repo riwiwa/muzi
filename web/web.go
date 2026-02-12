@@ -524,7 +524,6 @@ func importSpotifyHandler(w http.ResponseWriter, r *http.Request) {
 		jobsMu.Lock()
 		delete(importJobs, jobID)
 		jobsMu.Unlock()
-		close(progressChan)
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -585,7 +584,6 @@ func importLastFMHandler(w http.ResponseWriter, r *http.Request) {
 		jobsMu.Lock()
 		delete(importJobs, jobID)
 		jobsMu.Unlock()
-		close(progressChan)
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
