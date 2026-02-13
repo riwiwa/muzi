@@ -681,11 +681,39 @@ func importSpotifyProgressHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func hasUsers(ctx context.Context) bool {
+	var count int
+	err := db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM users;").Scan(&count)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error checking for users: %v\n", err)
+		return false
+	}
+	return count > 0
+}
+
+func rootHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !hasUsers(r.Context()) {
+			http.Redirect(w, r, "/createaccount", http.StatusSeeOther)
+			return
+		}
+
+		username := getLoggedInUsername(r)
+		if username == "" {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		http.Redirect(w, r, "/profile/"+username, http.StatusSeeOther)
+	}
+}
+
 func Start() {
 	addr := ":1234"
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(http.Dir("./static"))))
+	r.Get("/", rootHandler())
 	r.Get("/login", loginPageHandler())
 	r.Get("/createaccount", createAccountPageHandler())
 	r.Get("/profile/{username}", profilePageHandler())

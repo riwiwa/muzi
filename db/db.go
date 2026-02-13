@@ -95,7 +95,7 @@ func CreateUsersTable() error {
 			username TEXT NOT NULL UNIQUE,
 			password TEXT NOT NULL,
 			bio TEXT DEFAULT 'This profile has no bio.',
-			pfp TEXT DEFAULT '/files/assets/default.png',
+			pfp TEXT DEFAULT '/files/assets/pfps/default.png',
 			allow_duplicate_edits BOOLEAN DEFAULT FALSE,
 			pk SERIAL PRIMARY KEY
 		);`)
