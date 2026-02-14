@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"muzi/db"
 
@@ -23,7 +24,7 @@ type ProfileData struct {
 	ArtistCount         int
 	Artists             []string
 	Titles              []string
-	Times               []string
+	Times               []time.Time
 	Page                int
 	Title               string
 	LoggedInUsername    string
@@ -103,7 +104,7 @@ func profilePageHandler() http.HandlerFunc {
 			}
 			profileData.Artists = append(profileData.Artists, artist)
 			profileData.Titles = append(profileData.Titles, title)
-			profileData.Times = append(profileData.Times, time.Time.String())
+			profileData.Times = append(profileData.Times, time.Time)
 		}
 
 		err = templates.ExecuteTemplate(w, "base", profileData)

@@ -24,9 +24,11 @@ var templates *template.Template
 // Declares all functions for the HTML templates and parses them
 func init() {
 	funcMap := template.FuncMap{
-		"sub":       sub,
-		"add":       add,
-		"formatInt": formatInt,
+		"sub":                 sub,
+		"add":                 add,
+		"formatInt":           formatInt,
+		"formatTimestamp":     formatTimestamp,
+		"formatTimestampFull": formatTimestampFull,
 	}
 	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("./templates/*.gohtml"))
 }
