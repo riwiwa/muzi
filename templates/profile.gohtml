@@ -1,52 +1,40 @@
-<!doctype html>
-<html>
-  <head>
-    <link rel="stylesheet" href="/files/style.css" type="text/css">
-    <title>
-      muzi | {{.Username}}'s Profile
-    </title>
-  </head>
-  <body>
-    <div class="profile-top">
-      <img src="{{.Pfp}}" alt="{{.Username}}'s avatar">
-      <div class="username-bio">
-        <h1>{{.Username}}</h1>
-        <h2>{{.Bio}}</h2>
-      </div>
-      <div class="profile-top-blank">
-      </div>
-       <div class="user-stats-top">
-         <h3>{{formatInt .ScrobbleCount}}</h3> <p>Listens<p>
-         <h3>{{formatInt .ArtistCount}}</h3> <p>Artists<p>
-       </div>
+{{define "profile"}}
+  <div class="profile-top">
+    <img src="{{.Pfp}}" alt="{{.Username}}'s avatar">
+    <div class="username-bio">
+      <h1>{{.Username}}</h1>
+      <h2>{{.Bio}}</h2>
     </div>
-    <div class="profile-actions">
-      <a href="/import" class="btn">Import Data</a>
+    <div class="profile-top-blank">
     </div>
-    <div class="history">
-      <h3>Listening History</h3>
-      <table>
-        <tr>
-          <th>Artist</th>
-          <th>Title</th>
-          <th>Timestamp</th>
-        </tr>
-        {{$artists := .Artists}}
-        {{$times := .Times}}
-        {{range $index, $title := .Titles}}
-        <tr>
-          <td>{{index $artists $index}}</td>
-          <td>{{$title}}</td>
-          <td>{{index $times $index}}</td>
-        </tr>
-        {{end}}
-      </table>
-    </div>
-    <div class="page_buttons">
-      {{if gt .Page 1 }}
-      <a href="/profile/{{.Username}}?page={{sub .Page 1}}">Prev Page</a>
+     <div class="user-stats-top">
+       <h3>{{formatInt .ScrobbleCount}}</h3> <p>Listens<p>
+       <h3>{{formatInt .ArtistCount}}</h3> <p>Artists<p>
+     </div>
+  </div>
+  <div class="history">
+    <h3>Listening History</h3>
+    <table>
+      <tr>
+        <th>Artist</th>
+        <th>Title</th>
+        <th>Timestamp</th>
+      </tr>
+      {{$artists := .Artists}}
+      {{$times := .Times}}
+      {{range $index, $title := .Titles}}
+      <tr>
+        <td>{{index $artists $index}}</td>
+        <td>{{$title}}</td>
+        <td>{{formatTimestamp (index $times $index)}}</td>
+      </tr>
       {{end}}
-      <a href="/profile/{{.Username}}?page={{add .Page 1}}">Next Page</a>
-    </div>
-  </body>
-</html>
+    </table>
+  </div>
+  <div class="page_buttons">
+    {{if gt .Page 1 }}
+    <a href="/profile/{{.Username}}?page={{sub .Page 1}}">Prev Page</a>
+    {{end}}
+    <a href="/profile/{{.Username}}?page={{add .Page 1}}">Next Page</a>
+  </div>
+{{end}}

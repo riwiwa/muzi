@@ -25,6 +25,9 @@ type ProfileData struct {
 	Titles              []string
 	Times               []string
 	Page                int
+	Title               string
+	LoggedInUsername    string
+	TemplateName        string
 }
 
 // Render a page of the profile in the URL
@@ -57,6 +60,9 @@ func profilePageHandler() http.HandlerFunc {
 		var profileData ProfileData
 		profileData.Username = username
 		profileData.Page = pageInt
+		profileData.Title = username + "'s Profile"
+		profileData.LoggedInUsername = getLoggedInUsername(r)
+		profileData.TemplateName = "profile"
 
 		err = db.Pool.QueryRow(
 			r.Context(),
@@ -100,7 +106,7 @@ func profilePageHandler() http.HandlerFunc {
 			profileData.Times = append(profileData.Times, time.Time.String())
 		}
 
-		err = templates.ExecuteTemplate(w, "profile.gohtml", profileData)
+		err = templates.ExecuteTemplate(w, "base", profileData)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}

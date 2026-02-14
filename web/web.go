@@ -80,6 +80,7 @@ func Start() {
 	r.Post("/import/spotify", importSpotifyHandler)
 	r.Get("/import/lastfm/progress", importLastFMProgressHandler)
 	r.Get("/import/spotify/progress", importSpotifyProgressHandler)
+	r.Get("/settings", settingsPageHandler())
 	fmt.Printf("WebUI starting on %s\n", addr)
 	prot := http.NewCrossOriginProtection()
 	http.ListenAndServe(addr, prot.Handler(r))
