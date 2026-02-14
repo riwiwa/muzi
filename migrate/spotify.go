@@ -3,7 +3,7 @@ package migrate
 // Spotify import functionality for migrating Spotify listening history
 // from JSON export files into the database
 
-// This package handles:
+// This file handles:
 // - Parsing Spotify JSON track data
 // - Batch processing with deduplication (20-second window)
 // - Efficient bulk inserts using pgx.CopyFrom
