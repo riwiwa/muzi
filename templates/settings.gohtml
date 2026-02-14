@@ -1,0 +1,59 @@
+{{define "settings"}}
+  <div class="settings-container">
+    <h1>Settings</h1>
+
+    <!-- Tab Navigation -->
+    <div class="settings-tabs">
+      <button class="tab-button active" data-tab="import">Import Data</button>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- Import Data Tab -->
+      <div class="tab-panel active" id="import">
+        <div class="import-section">
+          <h2>Spotify</h2>
+          <p>Import your Spotify listening history from your data export.</p>
+          <form id="spotify-form" method="POST" action="/settings/import/spotify" enctype="multipart/form-data">
+            <input type="file" name="json_files" accept=".json,application/json" multiple required>
+            <button type="submit">Upload Spotify Data</button>
+          </form>
+
+          <div id="spotify-progress" class="progress-container" style="display: none;">
+            <div class="progress-status" id="spotify-progress-status">Initializing...</div>
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar-fill" id="spotify-progress-fill"></div>
+              <div class="progress-text" id="spotify-progress-text">0%</div>
+            </div>
+            <div class="progress-tracks" id="spotify-progress-tracks"></div>
+            <div class="progress-error" id="spotify-progress-error"></div>
+            <div class="progress-success" id="spotify-progress-success"></div>
+          </div>
+        </div>
+
+        <div class="import-section">
+          <h2>Last.fm</h2>
+          <p>Import your Last.fm scrobbles.</p>
+          <form id="lastfm-form" method="POST" action="/settings/import/lastfm">
+            <input type="text" name="lastfm_username" placeholder="Last.FM Username" required>
+            <input type="text" name="lastfm_api_key" placeholder="Last.FM API Key" required>
+            <button type="submit">Import from Last.fm</button>
+          </form>
+
+          <div id="lastfm-progress" class="progress-container" style="display: none;">
+            <div class="progress-status" id="lastfm-progress-status">Initializing...</div>
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar-fill" id="lastfm-progress-fill"></div>
+              <div class="progress-text" id="lastfm-progress-text">0%</div>
+            </div>
+            <div class="progress-tracks" id="lastfm-progress-tracks"></div>
+            <div class="progress-error" id="lastfm-progress-error"></div>
+            <div class="progress-success" id="lastfm-progress-success"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="/files/import.js"></script>
+{{end}}

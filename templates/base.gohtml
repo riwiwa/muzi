@@ -1,0 +1,51 @@
+{{define "base"}}
+  <!doctype html>
+  <html>
+    <head>
+      <link rel="stylesheet" href="/files/style.css" type="text/css">
+      <title>{{.Title}}</title>
+      {{block "head" .}}{{end}}
+    </head>
+    <body>
+      <!-- Hamburger Menu Button -->
+      <div class="menu-button" id="menuButton">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+  
+      <!-- Slide-out Menu -->
+      <div class="side-menu" id="sideMenu">
+        <div class="menu-header">
+          <h3>muzi</h3>
+        </div>
+        <nav class="menu-nav">
+          {{if .LoggedInUsername}}
+          <a href="/profile/{{.LoggedInUsername}}" class="menu-item">
+            <img src="/files/assets/icons/user.svg" class="menu-icon" alt="Profile">
+            <span>My Profile</span>
+          </a>
+          {{else}}
+          <a href="/login" class="menu-item">
+            <img src="/files/assets/icons/user.svg" class="menu-icon" alt="Login">
+            <span>Login</span>
+          </a>
+          {{end}}
+          <a href="/settings" class="menu-item">
+            <img src="/files/assets/icons/settings.svg" class="menu-icon" alt="Settings">
+            <span>Settings</span>
+          </a>
+        </nav>
+      </div>
+  
+      <!-- Overlay for closing menu -->
+      <div class="menu-overlay" id="menuOverlay"></div>
+  
+      <!-- Main Content -->
+      {{ if eq .TemplateName "profile"}}{{block "profile" .}}{{end}}{{end}}
+      {{ if eq .TemplateName "settings"}}{{block "settings" .}}{{end}}{{end}}
+  
+      <script src="/files/menu.js"></script>
+    </body>
+  </html>
+{{end}}
