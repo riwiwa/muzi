@@ -1,6 +1,7 @@
 package scrobble
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"muzi/db"
 )
 
 const SpotifyTokenURL = "https://accounts.spotify.com/api/token"
@@ -44,6 +47,7 @@ type SpotifyCurrentlyPlaying struct {
 }
 
 type SpotifyTrack struct {
+	Id         string          `json:"id"`
 	Name       string          `json:"name"`
 	DurationMs int             `json:"duration_ms"`
 	Artists    []SpotifyArtist `json:"artists"`
@@ -64,9 +68,8 @@ type SpotifyRecentPlays struct {
 }
 
 type SpotifyPlayItem struct {
-	Track      SpotifyTrack `json:"track"`
-	PlayedAt   string       `json:"played_at"`
-	PlayedAtMs int64        `json:"played_at_ms"`
+	Track    SpotifyTrack `json:"track"`
+	PlayedAt string       `json:"played_at"`
 }
 
 type SpotifyCursors struct {
@@ -317,6 +320,8 @@ func checkCurrentlyPlaying(userId int, accessToken string) error {
 		artistName = playing.Item.Artists[0].Name
 	}
 
+	checkAndScrobbleHalfway(userId, &playing.Item, playing.ProgressMs)
+
 	UpdateNowPlaying(NowPlaying{
 		UserId:    userId,
 		SongName:  playing.Item.Name,
@@ -363,9 +368,15 @@ func checkRecentPlays(userId int, accessToken string) error {
 			artistName = item.Track.Artists[0].Name
 		}
 
+		ts, err := time.Parse(time.RFC3339, item.PlayedAt)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  -> failed to parse timestamp %s: %v\n", item.PlayedAt, err)
+			continue
+		}
+
 		scrobbles = append(scrobbles, Scrobble{
 			UserId:    userId,
-			Timestamp: time.Unix(item.PlayedAtMs/1000, 0).UTC(),
+			Timestamp: ts,
 			SongName:  item.Track.Name,
 			Artist:    artistName,
 			Album:     item.Track.Album.Name,
@@ -408,4 +419,92 @@ func GetSpotifyAuthURL(userId int, baseURL string) (string, error) {
 
 	return fmt.Sprintf("%s?client_id=%s&response_type=code&redirect_uri=%s&scope=%s&state=%d",
 		SpotifyAuthURL, url.QueryEscape(clientId), url.QueryEscape(redirectURI), url.QueryEscape(scope), userId), nil
+}
+
+type LastTrack struct {
+	UserId     int
+	TrackId    string
+	SongName   string
+	Artist     string
+	AlbumName  string
+	DurationMs int
+	ProgressMs int
+	UpdatedAt  time.Time
+}
+
+func GetLastTrack(userId int) (*LastTrack, error) {
+	var track LastTrack
+	err := db.Pool.QueryRow(context.Background(),
+		`SELECT user_id, track_id, song_name, artist, album_name, duration_ms, progress_ms, updated_at
+		 FROM spotify_last_track WHERE user_id = $1`,
+		userId).Scan(&track.UserId, &track.TrackId, &track.SongName, &track.Artist,
+		&track.AlbumName, &track.DurationMs, &track.ProgressMs, &track.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &track, nil
+}
+
+func SetLastTrack(userId int, trackId, songName, artist, albumName string, durationMs, progressMs int) error {
+	_, err := db.Pool.Exec(context.Background(),
+		`INSERT INTO spotify_last_track (user_id, track_id, song_name, artist, album_name, duration_ms, progress_ms, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+		 ON CONFLICT (user_id) DO UPDATE SET
+			track_id = $2, song_name = $3, artist = $4, album_name = $5, duration_ms = $6, progress_ms = $7, updated_at = NOW()`,
+		userId, trackId, songName, artist, albumName, durationMs, progressMs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error saving last track: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func checkAndScrobbleHalfway(userId int, currentTrack *SpotifyTrack, progressMs int) {
+	if currentTrack.Id == "" || currentTrack.DurationMs == 0 {
+		return
+	}
+
+	lastTrack, err := GetLastTrack(userId)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			SetLastTrack(userId, currentTrack.Id, currentTrack.Name,
+				getArtistName(currentTrack.Artists), currentTrack.Album.Name, currentTrack.DurationMs, progressMs)
+		}
+		return
+	}
+
+	if lastTrack.TrackId != currentTrack.Id {
+		if lastTrack.DurationMs > 0 {
+			percentagePlayed := float64(lastTrack.ProgressMs) / float64(lastTrack.DurationMs)
+			if percentagePlayed >= 0.5 || lastTrack.ProgressMs >= 240000 {
+				msPlayed := lastTrack.ProgressMs
+				if msPlayed > lastTrack.DurationMs {
+					msPlayed = lastTrack.DurationMs
+				}
+				scrobble := Scrobble{
+					UserId:    userId,
+					Timestamp: lastTrack.UpdatedAt,
+					SongName:  lastTrack.SongName,
+					Artist:    lastTrack.Artist,
+					Album:     lastTrack.AlbumName,
+					MsPlayed:  msPlayed,
+					Platform:  "spotify",
+				}
+				SaveScrobble(scrobble)
+			}
+		}
+
+		SetLastTrack(userId, currentTrack.Id, currentTrack.Name,
+			getArtistName(currentTrack.Artists), currentTrack.Album.Name, currentTrack.DurationMs, progressMs)
+	} else {
+		SetLastTrack(userId, currentTrack.Id, currentTrack.Name,
+			getArtistName(currentTrack.Artists), currentTrack.Album.Name, currentTrack.DurationMs, progressMs)
+	}
+}
+
+func getArtistName(artists []SpotifyArtist) string {
+	if len(artists) > 0 {
+		return artists[0].Name
+	}
+	return ""
 }

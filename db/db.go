@@ -18,7 +18,10 @@ func CreateAllTables() error {
 	if err := CreateUsersTable(); err != nil {
 		return err
 	}
-	return CreateSessionsTable()
+	if err := CreateSessionsTable(); err != nil {
+		return err
+	}
+	return CreateSpotifyLastTrackTable()
 }
 
 func GetDbUrl(dbName bool) string {
@@ -134,7 +137,26 @@ func CleanupExpiredSessions() error {
 	_, err := Pool.Exec(context.Background(),
 		"DELETE FROM sessions WHERE expires_at < NOW();")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error cleaning up expired sessions: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error cleaning up sessions: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func CreateSpotifyLastTrackTable() error {
+	_, err := Pool.Exec(context.Background(),
+		`CREATE TABLE IF NOT EXISTS spotify_last_track (
+			user_id INTEGER PRIMARY KEY REFERENCES users(pk) ON DELETE CASCADE,
+			track_id TEXT NOT NULL,
+			song_name TEXT NOT NULL,
+			artist TEXT NOT NULL,
+			album_name TEXT,
+			duration_ms INTEGER NOT NULL,
+			progress_ms INTEGER NOT NULL DEFAULT 0,
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating spotify_last_track table: %v\n", err)
 		return err
 	}
 	return nil
