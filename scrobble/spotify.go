@@ -297,7 +297,7 @@ func checkCurrentlyPlaying(userId int, accessToken string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 204 {
-		ClearNowPlaying(userId)
+		ClearNowPlayingPlatform(userId, "spotify")
 		return nil
 	}
 
@@ -311,7 +311,7 @@ func checkCurrentlyPlaying(userId int, accessToken string) error {
 	}
 
 	if !playing.IsPlaying || playing.Item.Name == "" {
-		ClearNowPlaying(userId)
+		ClearNowPlayingPlatform(userId, "spotify")
 		return nil
 	}
 

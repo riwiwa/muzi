@@ -36,7 +36,7 @@ type NowPlaying struct {
 	UpdatedAt time.Time
 }
 
-var CurrentNowPlaying = make(map[int]NowPlaying)
+var CurrentNowPlaying = make(map[int]map[string]NowPlaying)
 
 func GenerateAPIKey() (string, error) {
 	bytes := make([]byte, 16)
@@ -78,6 +78,20 @@ func GetUserByAPIKey(apiKey string) (int, string, error) {
 		return 0, "", err
 	}
 	return userId, username, nil
+}
+
+func GetUserByUsername(username string) (int, error) {
+	if username == "" {
+		return 0, fmt.Errorf("empty username")
+	}
+
+	var userId int
+	err := db.Pool.QueryRow(context.Background(),
+		"SELECT pk FROM users WHERE username = $1", username).Scan(&userId)
+	if err != nil {
+		return 0, err
+	}
+	return userId, nil
 }
 
 func GetUserBySessionKey(sessionKey string) (int, string, error) {
@@ -167,16 +181,36 @@ func checkDuplicate(userId int, artist, songName string, timestamp time.Time) (b
 }
 
 func UpdateNowPlaying(np NowPlaying) {
-	CurrentNowPlaying[np.UserId] = np
+	if CurrentNowPlaying[np.UserId] == nil {
+		CurrentNowPlaying[np.UserId] = make(map[string]NowPlaying)
+	}
+	CurrentNowPlaying[np.UserId][np.Platform] = np
 }
 
 func GetNowPlaying(userId int) (NowPlaying, bool) {
-	np, ok := CurrentNowPlaying[userId]
-	return np, ok
+	platforms := CurrentNowPlaying[userId]
+	if platforms == nil {
+		return NowPlaying{}, false
+	}
+	np, ok := platforms["lastfm_api"]
+	if ok && np.SongName != "" {
+		return np, true
+	}
+	np, ok = platforms["spotify"]
+	if ok && np.SongName != "" {
+		return np, true
+	}
+	return NowPlaying{}, false
 }
 
 func ClearNowPlaying(userId int) {
 	delete(CurrentNowPlaying, userId)
+}
+
+func ClearNowPlayingPlatform(userId int, platform string) {
+	if CurrentNowPlaying[userId] != nil {
+		delete(CurrentNowPlaying[userId], platform)
+	}
 }
 
 func GetUserSpotifyCredentials(userId int) (clientId, clientSecret, accessToken, refreshToken string, expiresAt time.Time, err error) {

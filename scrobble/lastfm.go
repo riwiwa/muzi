@@ -23,6 +23,15 @@ func NewLastFMHandler() *LastFMHandler {
 }
 
 func (h *LastFMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		if r.URL.Query().Get("hs") == "true" {
+			h.handleHandshake(w, r)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -34,36 +43,83 @@ func (h *LastFMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	method := r.FormValue("method")
-	apiKey := r.FormValue("api_key")
+	method := r.PostForm.Get("method")
+	apiKey := r.PostForm.Get("api_key")
+	sk := r.PostForm.Get("s")
+	track := r.PostForm.Get("t")
 
-	switch method {
-	case "auth.gettoken":
-		h.handleGetToken(w, apiKey)
-	case "auth.getsession":
-		h.handleGetSession(w, r)
-	case "track.updateNowPlaying":
-		h.handleNowPlaying(w, r)
-	case "track.scrobble":
-		h.handleScrobble(w, r)
-	default:
-		h.respond(w, "failed", 400, fmt.Sprintf("Invalid method: %s", method))
+	if method != "" {
+		switch method {
+		case "auth.gettoken":
+			h.handleGetToken(w, apiKey)
+		case "auth.getsession":
+			h.handleGetSession(w, r)
+		case "track.updateNowPlaying":
+			h.handleNowPlaying(w, r)
+		case "track.scrobble":
+			h.handleScrobble(w, r)
+		default:
+			h.respond(w, "failed", 400, fmt.Sprintf("Invalid method: %s", method))
+		}
+		return
 	}
+
+	if sk != "" {
+		if r.PostForm.Get("a[0]") != "" && (r.PostForm.Get("t[0]") != "" || r.PostForm.Get("i[0]") != "") {
+			h.handleScrobble(w, r)
+			return
+		}
+		if track != "" {
+			h.handleNowPlaying(w, r)
+			return
+		}
+	}
+
+	h.respond(w, "failed", 400, "Missing required parameters")
 }
 
 func (h *LastFMHandler) respond(w http.ResponseWriter, status string, code int, message string) {
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	fmt.Fprintf(w, `<?xml version="1.0" encoding="utf-8"?>
-<lfm status="%s">
-  <error code="%d">
-    <message>%s</message>
-  </error>
-</lfm>`, status, code, message)
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(fmt.Sprintf("FAILED %s", message)))
 }
 
 func (h *LastFMHandler) respondOK(w http.ResponseWriter, content string) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.Write([]byte(content))
+}
+
+func (h *LastFMHandler) handleHandshake(w http.ResponseWriter, r *http.Request) {
+	username := r.URL.Query().Get("u")
+	token := r.URL.Query().Get("t")
+	authToken := r.URL.Query().Get("a")
+
+	if username == "" || token == "" || authToken == "" {
+		w.Write([]byte("BADAUTH"))
+		return
+	}
+
+	userId, err := GetUserByUsername(username)
+	if err != nil {
+		w.Write([]byte("BADAUTH"))
+		return
+	}
+
+	sessionKey, err := GenerateSessionKey()
+	if err != nil {
+		w.Write([]byte("FAILED Could not generate session"))
+		return
+	}
+
+	_, err = db.Pool.Exec(context.Background(),
+		`UPDATE users SET api_secret = $1 WHERE pk = $2`,
+		sessionKey, userId)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error updating session key: %v\n", err)
+		w.Write([]byte("FAILED Database error"))
+		return
+	}
+
+	w.Write([]byte(fmt.Sprintf("OK\n%s\nhttp://127.0.0.1:1234/2.0/\nhttp://127.0.0.1:1234/2.0/\n", sessionKey)))
 }
 
 func (h *LastFMHandler) handleGetToken(w http.ResponseWriter, apiKey string) {
@@ -121,7 +177,7 @@ func (h *LastFMHandler) handleGetSession(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *LastFMHandler) handleNowPlaying(w http.ResponseWriter, r *http.Request) {
-	sessionKey := r.FormValue("sk")
+	sessionKey := r.PostForm.Get("s")
 	if sessionKey == "" {
 		h.respond(w, "failed", 9, "Invalid session")
 		return
@@ -133,11 +189,16 @@ func (h *LastFMHandler) handleNowPlaying(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	artist := r.FormValue("artist")
-	track := r.FormValue("track")
-	album := r.FormValue("album")
+	artist := r.PostForm.Get("a")
+	track := r.PostForm.Get("t")
+	album := r.PostForm.Get("b")
 
-	duration := r.FormValue("duration")
+	if track == "" {
+		h.respondOK(w, "OK")
+		return
+	}
+
+	duration := r.PostForm.Get("l")
 	msPlayed := 0
 	if duration != "" {
 		if d, err := strconv.Atoi(duration); err == nil {
@@ -145,24 +206,21 @@ func (h *LastFMHandler) handleNowPlaying(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	if track != "" {
-		UpdateNowPlaying(NowPlaying{
-			UserId:    userId,
-			SongName:  track,
-			Artist:    artist,
-			Album:     album,
-			MsPlayed:  msPlayed,
-			Platform:  "lastfm_api",
-			UpdatedAt: time.Now(),
-		})
-	}
+	UpdateNowPlaying(NowPlaying{
+		UserId:    userId,
+		SongName:  track,
+		Artist:    artist,
+		Album:     album,
+		MsPlayed:  msPlayed,
+		Platform:  "lastfm_api",
+		UpdatedAt: time.Now(),
+	})
 
-	h.respondOK(w, `<?xml version="1.0" encoding="utf-8"?>
-<lfm status="ok"></lfm>`)
+	h.respondOK(w, "OK")
 }
 
 func (h *LastFMHandler) handleScrobble(w http.ResponseWriter, r *http.Request) {
-	sessionKey := r.FormValue("sk")
+	sessionKey := r.PostForm.Get("s")
 	if sessionKey == "" {
 		h.respond(w, "failed", 9, "Invalid session")
 		return
@@ -174,7 +232,7 @@ func (h *LastFMHandler) handleScrobble(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scrobbles := h.parseScrobbles(r.Form, userId)
+	scrobbles := h.parseScrobbles(r.PostForm, userId)
 	if len(scrobbles) == 0 {
 		h.respond(w, "failed", 1, "No scrobbles to submit")
 		return
@@ -194,10 +252,7 @@ func (h *LastFMHandler) handleScrobble(w http.ResponseWriter, r *http.Request) {
 
 	ClearNowPlaying(userId)
 
-	h.respondOK(w, fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
-<lfm status="ok">
-  <scrobbles accepted="%d" ignored="%d"></scrobbles>
-</lfm>`, accepted, ignored))
+	h.respondOK(w, fmt.Sprintf("OK\n%d\n%d\n", accepted, ignored))
 }
 
 func (h *LastFMHandler) parseScrobbles(form url.Values, userId int) []Scrobble {
@@ -207,15 +262,15 @@ func (h *LastFMHandler) parseScrobbles(form url.Values, userId int) []Scrobble {
 		var artist, track, album, timestampStr string
 
 		if i == 0 {
-			artist = form.Get("artist")
-			track = form.Get("track")
-			album = form.Get("album")
-			timestampStr = form.Get("timestamp")
+			artist = form.Get("a[0]")
+			track = form.Get("t[0]")
+			album = form.Get("b[0]")
+			timestampStr = form.Get("i[0]")
 		} else {
-			artist = form.Get(fmt.Sprintf("artist[%d]", i-1))
-			track = form.Get(fmt.Sprintf("track[%d]", i-1))
-			album = form.Get(fmt.Sprintf("album[%d]", i-1))
-			timestampStr = form.Get(fmt.Sprintf("timestamp[%d]", i-1))
+			artist = form.Get(fmt.Sprintf("a[%d]", i))
+			track = form.Get(fmt.Sprintf("t[%d]", i))
+			album = form.Get(fmt.Sprintf("b[%d]", i))
+			timestampStr = form.Get(fmt.Sprintf("i[%d]", i))
 		}
 
 		if artist == "" || track == "" || timestampStr == "" {
@@ -227,7 +282,7 @@ func (h *LastFMHandler) parseScrobbles(form url.Values, userId int) []Scrobble {
 			continue
 		}
 
-		duration := form.Get(fmt.Sprintf("duration[%d]", i-1))
+		duration := form.Get(fmt.Sprintf("l[%d]", i))
 		msPlayed := 0
 		if duration != "" {
 			if d, err := strconv.Atoi(duration); err == nil {

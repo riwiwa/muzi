@@ -16,8 +16,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
+const serverAddr = "127.0.0.1:1234"
+
 // 50 MiB
 const maxHeaderSize int64 = 50 * 1024 * 1024
+
+func serverAddrStr() string {
+	return serverAddr
+}
 
 // Holds all the parsed HTML templates
 var templates *template.Template
@@ -68,7 +74,7 @@ func rootHandler() http.HandlerFunc {
 
 // Serves all pages at the specified address.
 func Start() {
-	addr := ":1234"
+	addr := serverAddr
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(http.Dir("./static"))))
@@ -84,7 +90,8 @@ func Start() {
 	r.Get("/import/lastfm/progress", importLastFMProgressHandler)
 	r.Get("/import/spotify/progress", importSpotifyProgressHandler)
 
-	r.Post("/2.0/", http.HandlerFunc(scrobble.NewLastFMHandler().ServeHTTP))
+	r.Handle("/2.0", scrobble.NewLastFMHandler())
+	r.Handle("/2.0/", scrobble.NewLastFMHandler())
 	r.Post("/1/submit-listens", http.HandlerFunc(scrobble.NewListenbrainzHandler().ServeHTTP))
 	r.Route("/scrobble/spotify", func(r chi.Router) {
 		r.Get("/authorize", http.HandlerFunc(scrobble.NewSpotifyHandler().ServeHTTP))
