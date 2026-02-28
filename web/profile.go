@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"muzi/db"
+	"muzi/scrobble"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgtype"
@@ -29,6 +30,8 @@ type ProfileData struct {
 	Title               string
 	LoggedInUsername    string
 	TemplateName        string
+	NowPlayingArtist    string
+	NowPlayingTitle     string
 }
 
 // Render a page of the profile in the URL
@@ -77,6 +80,11 @@ func profilePageHandler() http.HandlerFunc {
 			fmt.Fprintf(os.Stderr, "Cannot get profile for %s: %v\n", username, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		if np, ok := scrobble.GetNowPlaying(userId); ok {
+			profileData.NowPlayingArtist = np.Artist
+			profileData.NowPlayingTitle = np.SongName
 		}
 
 		rows, err := db.Pool.Query(

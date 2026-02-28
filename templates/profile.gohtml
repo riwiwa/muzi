@@ -20,6 +20,13 @@
         <th>Title</th>
         <th>Timestamp</th>
       </tr>
+      {{if .NowPlayingTitle}}
+      <tr>
+        <td>{{.NowPlayingArtist}}</td>
+        <td>{{.NowPlayingTitle}}</td>
+        <td>Now Playing</td>
+      </tr>
+      {{end}}
       {{$artists := .Artists}}
       {{$times := .Times}}
       {{range $index, $title := .Titles}}
