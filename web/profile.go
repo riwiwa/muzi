@@ -82,9 +82,11 @@ func profilePageHandler() http.HandlerFunc {
 			return
 		}
 
-		if np, ok := scrobble.GetNowPlaying(userId); ok {
-			profileData.NowPlayingArtist = np.Artist
-			profileData.NowPlayingTitle = np.SongName
+		if pageInt == 1 {
+			if np, ok := scrobble.GetNowPlaying(userId); ok {
+				profileData.NowPlayingArtist = np.Artist
+				profileData.NowPlayingTitle = np.SongName
+			}
 		}
 
 		rows, err := db.Pool.Query(
