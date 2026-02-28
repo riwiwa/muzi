@@ -77,9 +77,9 @@ type SpotifyCursors struct {
 func (h *SpotifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
-	if path == "/authorize" {
+	if path == "/scrobble/spotify/authorize" {
 		h.handleAuthorize(w, r)
-	} else if path == "/callback" {
+	} else if path == "/scrobble/spotify/callback" {
 		h.handleCallback(w, r)
 	} else {
 		http.Error(w, "Not found", http.StatusNotFound)
@@ -94,6 +94,7 @@ func (h *SpotifyHandler) handleAuthorize(w http.ResponseWriter, r *http.Request)
 	}
 
 	clientId, _, _, _, _, err := GetUserSpotifyCredentials(userIdToInt(userId))
+	fmt.Fprintf(os.Stderr, "handleAuthorize: userId=%s, clientId='%s', err=%v\n", userId, clientId, err)
 	if err != nil || clientId == "" {
 		http.Error(w, "Spotify credentials not configured", http.StatusBadRequest)
 		return
@@ -389,7 +390,11 @@ func getBaseURL(r *http.Request) string {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	return scheme + "://" + r.Host
+	host := r.Host
+	if host == "localhost:1234" || host == "localhost" {
+		host = "127.0.0.1:1234"
+	}
+	return scheme + "://" + host
 }
 
 func GetSpotifyAuthURL(userId int, baseURL string) (string, error) {

@@ -180,14 +180,33 @@ func ClearNowPlaying(userId int) {
 }
 
 func GetUserSpotifyCredentials(userId int) (clientId, clientSecret, accessToken, refreshToken string, expiresAt time.Time, err error) {
+	var clientIdPg, clientSecretPg, accessTokenPg, refreshTokenPg pgtype.Text
+	var expiresAtPg pgtype.Timestamptz
 	err = db.Pool.QueryRow(context.Background(),
 		`SELECT spotify_client_id, spotify_client_secret, spotify_access_token, 
 			spotify_refresh_token, spotify_token_expires 
 		FROM users WHERE pk = $1`,
-		userId).Scan(&clientId, &clientSecret, &accessToken, &refreshToken, &expiresAt)
+		userId).Scan(&clientIdPg, &clientSecretPg, &accessTokenPg, &refreshTokenPg, &expiresAtPg)
 	if err != nil {
 		return "", "", "", "", time.Time{}, err
 	}
+
+	if clientIdPg.Status == pgtype.Present {
+		clientId = clientIdPg.String
+	}
+	if clientSecretPg.Status == pgtype.Present {
+		clientSecret = clientSecretPg.String
+	}
+	if accessTokenPg.Status == pgtype.Present {
+		accessToken = accessTokenPg.String
+	}
+	if refreshTokenPg.Status == pgtype.Present {
+		refreshToken = refreshTokenPg.String
+	}
+	if expiresAtPg.Status == pgtype.Present {
+		expiresAt = expiresAtPg.Time
+	}
+
 	return clientId, clientSecret, accessToken, refreshToken, expiresAt, nil
 }
 

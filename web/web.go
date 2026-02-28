@@ -91,6 +91,7 @@ func Start() {
 		r.Get("/callback", http.HandlerFunc(scrobble.NewSpotifyHandler().ServeHTTP))
 	})
 
+	r.Get("/settings/spotify-connect", spotifyConnectHandler)
 	r.Get("/settings", settingsPageHandler())
 	r.Post("/settings/generate-apikey", generateAPIKeyHandler)
 	r.Post("/settings/update-spotify", updateSpotifyCredentialsHandler)

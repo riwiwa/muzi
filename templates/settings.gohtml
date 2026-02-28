@@ -98,6 +98,11 @@
             <button type="submit">Save Spotify Credentials</button>
           </form>
 
+          {{if and .SpotifyClientId (not .SpotifyConnected)}}
+            <p><a href="/settings/spotify-connect" class="button">Connect Spotify</a></p>
+            <p class="info">Click to authorize Muzi to access your Spotify account.</p>
+          {{end}}
+
           {{if .SpotifyConnected}}
             <p class="success">Spotify is connected and importing!</p>
           {{end}}

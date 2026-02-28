@@ -134,3 +134,34 @@ func updateSpotifyCredentialsHandler(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
+
+func spotifyConnectHandler(w http.ResponseWriter, r *http.Request) {
+	username := getLoggedInUsername(r)
+	if username == "" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	userId, err := getUserIdByUsername(r.Context(), username)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+
+	user, err := scrobble.GetUserById(userId)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "spotifyConnectHandler: GetUserById error: %v\n", err)
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "spotifyConnectHandler: userId=%d, SpotifyClientId=%v\n", userId, user.SpotifyClientId)
+
+	if user.SpotifyClientId == nil || *user.SpotifyClientId == "" {
+		fmt.Fprintf(os.Stderr, "spotifyConnectHandler: SpotifyClientId is nil or empty, redirecting to settings\n")
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/scrobble/spotify/authorize?user_id=%d", userId), http.StatusSeeOther)
+}
