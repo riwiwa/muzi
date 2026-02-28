@@ -88,7 +88,6 @@ func CreateHistoryTable() error {
 	return nil
 }
 
-// TODO: move user settings to jsonb in db
 func CreateUsersTable() error {
 	_, err := Pool.Exec(context.Background(),
 		`CREATE TABLE IF NOT EXISTS users (
@@ -97,8 +96,17 @@ func CreateUsersTable() error {
 			bio TEXT DEFAULT 'This profile has no bio.',
 			pfp TEXT DEFAULT '/files/assets/pfps/default.png',
 			allow_duplicate_edits BOOLEAN DEFAULT FALSE,
+			api_key TEXT,
+			api_secret TEXT,
+			spotify_client_id TEXT,
+			spotify_client_secret TEXT,
+			spotify_access_token TEXT,
+			spotify_refresh_token TEXT,
+			spotify_token_expires TIMESTAMPTZ,
+			last_spotify_check TIMESTAMPTZ,
 			pk SERIAL PRIMARY KEY
-		);`)
+		);
+		CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key);`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating users table: %v\n", err)
 		return err

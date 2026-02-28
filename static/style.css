@@ -397,3 +397,40 @@
   font-size: 14px;
   margin-top: 10px;
 }
+
+/* Tab Panels */
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+/* API Key Display */
+.api-key-display {
+  margin: 15px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.api-key-display label {
+  color: #888;
+  font-size: 14px;
+}
+
+.api-key-display code {
+  background: #111;
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: #AFA;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.success {
+  color: #8F8;
+  margin-top: 10px;
+}

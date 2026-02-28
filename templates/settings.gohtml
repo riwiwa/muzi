@@ -5,6 +5,7 @@
     <!-- Tab Navigation -->
     <div class="settings-tabs">
       <button class="tab-button active" data-tab="import">Import Data</button>
+      <button class="tab-button" data-tab="scrobble">Scrobble API</button>
     </div>
 
     <!-- Tab Content -->
@@ -52,8 +53,69 @@
           </div>
         </div>
       </div>
+
+      <!-- Scrobble API Tab -->
+      <div class="tab-panel" id="scrobble">
+        <div class="import-section">
+          <h2>API Keys</h2>
+          <p>Generate an API key to receive scrobbles from external apps.</p>
+          {{if .APIKey}}
+            <div class="api-key-display">
+              <label>API Key:</label>
+              <code>{{.APIKey}}</code>
+            </div>
+            <div class="api-key-display">
+              <label>API Secret:</label>
+              <code>{{.APISecret}}</code>
+            </div>
+          {{end}}
+          <form method="POST" action="/settings/generate-apikey">
+            <button type="submit">{{if .APIKey}}Regenerate{{else}}Generate{{end}} API Key</button>
+          </form>
+        </div>
+
+        <div class="import-section">
+          <h2>Endpoint URLs</h2>
+          <p>Use these URLs in your scrobbling apps:</p>
+          <div class="api-key-display">
+            <label>Last.fm Compatible:</label>
+            <code>/2.0/</code>
+          </div>
+          <div class="api-key-display">
+            <label>Listenbrainz JSON:</label>
+            <code>/1/submit-listens</code>
+          </div>
+        </div>
+
+        <div class="import-section">
+          <h2>Spotify Integration</h2>
+          <p>Connect your Spotify account to automatically import your listening history.</p>
+          <p>Create a Spotify app at <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a> and enter your credentials below.</p>
+          
+          <form method="POST" action="/settings/update-spotify">
+            <input type="text" name="spotify_client_id" placeholder="Spotify Client ID" value="{{.SpotifyClientId}}">
+            <input type="password" name="spotify_client_secret" placeholder="Spotify Client Secret">
+            <button type="submit">Save Spotify Credentials</button>
+          </form>
+
+          {{if .SpotifyConnected}}
+            <p class="success">Spotify is connected and importing!</p>
+          {{end}}
+        </div>
+      </div>
     </div>
   </div>
   
   <script src="/files/import.js"></script>
+  <script>
+    document.querySelectorAll('.tab-button').forEach(button => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        
+        button.classList.add('active');
+        document.getElementById(button.dataset.tab).classList.add('active');
+      });
+    });
+  </script>
 {{end}}

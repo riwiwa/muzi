@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"muzi/db"
+	"muzi/scrobble"
 	"muzi/web"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,5 +29,6 @@ func main() {
 
 	check("ensuring all tables exist", db.CreateAllTables())
 	check("cleaning expired sessions", db.CleanupExpiredSessions())
+	scrobble.StartSpotifyPoller()
 	web.Start()
 }

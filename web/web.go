@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"muzi/db"
+	"muzi/scrobble"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -82,7 +83,17 @@ func Start() {
 	r.Post("/import/spotify", importSpotifyHandler)
 	r.Get("/import/lastfm/progress", importLastFMProgressHandler)
 	r.Get("/import/spotify/progress", importSpotifyProgressHandler)
+
+	r.Post("/2.0/", http.HandlerFunc(scrobble.NewLastFMHandler().ServeHTTP))
+	r.Post("/1/submit-listens", http.HandlerFunc(scrobble.NewListenbrainzHandler().ServeHTTP))
+	r.Route("/scrobble/spotify", func(r chi.Router) {
+		r.Get("/authorize", http.HandlerFunc(scrobble.NewSpotifyHandler().ServeHTTP))
+		r.Get("/callback", http.HandlerFunc(scrobble.NewSpotifyHandler().ServeHTTP))
+	})
+
 	r.Get("/settings", settingsPageHandler())
+	r.Post("/settings/generate-apikey", generateAPIKeyHandler)
+	r.Post("/settings/update-spotify", updateSpotifyCredentialsHandler)
 	fmt.Printf("WebUI starting on %s\n", addr)
 	prot := http.NewCrossOriginProtection()
 	http.ListenAndServe(addr, prot.Handler(r))
