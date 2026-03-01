@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       clearTimeout(searchTimeout);
       
-      if (query.length < 2) {
+      if (query.length < 1) {
         searchResults.classList.remove('active');
         searchResults.innerHTML = '';
         return;

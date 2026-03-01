@@ -298,7 +298,12 @@ func editSongHandler() http.HandlerFunc {
 			return
 		}
 
-		http.Redirect(w, r, "/profile/"+username+"/song/"+url.QueryEscape(artist.Name)+"/"+url.QueryEscape(title), http.StatusSeeOther)
+		http.Redirect(
+			w,
+			r,
+			"/profile/"+username+"/song/"+url.QueryEscape(artist.Name)+"/"+url.QueryEscape(title),
+			http.StatusSeeOther,
+		)
 	}
 }
 
@@ -431,7 +436,12 @@ func editAlbumHandler() http.HandlerFunc {
 			return
 		}
 
-		http.Redirect(w, r, "/profile/"+username+"/album/"+url.QueryEscape(artist.Name)+"/"+url.QueryEscape(title), http.StatusSeeOther)
+		http.Redirect(
+			w,
+			r,
+			"/profile/"+username+"/album/"+url.QueryEscape(artist.Name)+"/"+url.QueryEscape(title),
+			http.StatusSeeOther,
+		)
 	}
 }
 
@@ -481,13 +491,34 @@ func artistInlineEditHandler() http.HandlerFunc {
 		switch field {
 		case "name":
 			artist, _ := db.GetArtistById(artistId)
-			updateErr = db.UpdateArtist(artistId, req.Value, artist.ImageUrl, artist.Bio, artist.SpotifyId, artist.MusicbrainzId)
+			updateErr = db.UpdateArtist(
+				artistId,
+				req.Value,
+				artist.ImageUrl,
+				artist.Bio,
+				artist.SpotifyId,
+				artist.MusicbrainzId,
+			)
 		case "bio":
 			artist, _ := db.GetArtistById(artistId)
-			updateErr = db.UpdateArtist(artistId, artist.Name, artist.ImageUrl, req.Value, artist.SpotifyId, artist.MusicbrainzId)
+			updateErr = db.UpdateArtist(
+				artistId,
+				artist.Name,
+				artist.ImageUrl,
+				req.Value,
+				artist.SpotifyId,
+				artist.MusicbrainzId,
+			)
 		case "image_url":
 			artist, _ := db.GetArtistById(artistId)
-			updateErr = db.UpdateArtist(artistId, artist.Name, req.Value, artist.Bio, artist.SpotifyId, artist.MusicbrainzId)
+			updateErr = db.UpdateArtist(
+				artistId,
+				artist.Name,
+				req.Value,
+				artist.Bio,
+				artist.SpotifyId,
+				artist.MusicbrainzId,
+			)
 		default:
 			http.Error(w, "Invalid field", http.StatusBadRequest)
 			return
@@ -589,7 +620,13 @@ func songInlineEditHandler() http.HandlerFunc {
 		}
 
 		song, _ := db.GetSongById(songId)
-		updateErr := db.UpdateSong(songId, req.Value, song.AlbumId, song.SpotifyId, song.MusicbrainzId)
+		updateErr := db.UpdateSong(
+			songId,
+			req.Value,
+			song.AlbumId,
+			song.SpotifyId,
+			song.MusicbrainzId,
+		)
 
 		if updateErr != nil {
 			fmt.Fprintf(os.Stderr, "Error updating song: %v\n", updateErr)
@@ -772,7 +809,7 @@ func searchHandler() http.HandlerFunc {
 		}
 
 		query := r.URL.Query().Get("q")
-		if len(query) < 2 {
+		if len(query) < 1 {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte("[]"))
 			return
@@ -803,9 +840,13 @@ func searchHandler() http.HandlerFunc {
 					Type:   "song",
 					Name:   s.Title,
 					Artist: artist.Name,
-					Url:    "/profile/" + username + "/song/" + url.QueryEscape(artist.Name) + "/" + url.QueryEscape(s.Title),
-					Count:  count,
-					Score:  songSim,
+					Url: "/profile/" + username + "/song/" + url.QueryEscape(
+						artist.Name,
+					) + "/" + url.QueryEscape(
+						s.Title,
+					),
+					Count: count,
+					Score: songSim,
 				})
 			}
 		}
@@ -819,15 +860,23 @@ func searchHandler() http.HandlerFunc {
 					Type:   "album",
 					Name:   al.Title,
 					Artist: artist.Name,
-					Url:    "/profile/" + username + "/album/" + url.QueryEscape(artist.Name) + "/" + url.QueryEscape(al.Title),
-					Count:  count,
-					Score:  albumSim,
+					Url: "/profile/" + username + "/album/" + url.QueryEscape(
+						artist.Name,
+					) + "/" + url.QueryEscape(
+						al.Title,
+					),
+					Count: count,
+					Score: albumSim,
 				})
 			}
 		}
 
 		sort.Slice(results, func(i, j int) bool {
-			return results[i].Score+float64(results[i].Count)*0.01 > results[j].Score+float64(results[j].Count)*0.01
+			return results[i].Score+float64(
+				results[i].Count,
+			)*0.01 > results[j].Score+float64(
+				results[j].Count,
+			)*0.01
 		})
 
 		w.Header().Set("Content-Type", "application/json")
@@ -878,7 +927,7 @@ func imageUploadHandler() http.HandlerFunc {
 		filename := hex.EncodeToString(hashBytes) + ext
 
 		uploadDir := "./static/uploads"
-		if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating upload dir: %v\n", err)
 			http.Error(w, "Server error", http.StatusInternalServerError)
 			return
