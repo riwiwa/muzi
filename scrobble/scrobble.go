@@ -200,6 +200,10 @@ func GetNowPlaying(userId int) (NowPlaying, bool) {
 	if ok && np.SongName != "" {
 		return np, true
 	}
+	np, ok = platforms["listenbrainz"]
+	if ok && np.SongName != "" {
+		return np, true
+	}
 	return NowPlaying{}, false
 }
 

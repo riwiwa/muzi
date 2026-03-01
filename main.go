@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"muzi/config"
 	"muzi/db"
 	"muzi/scrobble"
 	"muzi/web"
@@ -20,9 +21,14 @@ func check(msg string, err error) {
 }
 
 func main() {
+	_, err := config.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
 	check("ensuring muzi DB exists", db.CreateDB())
 
-	var err error
 	db.Pool, err = pgxpool.New(context.Background(), db.GetDbUrl(true))
 	check("connecting to muzi database", err)
 	defer db.Pool.Close()

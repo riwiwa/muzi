@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	"muzi/config"
 	"muzi/db"
 	"muzi/scrobble"
 
@@ -16,13 +17,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-const serverAddr = "127.0.0.1:1234"
-
 // 50 MiB
 const maxHeaderSize int64 = 50 * 1024 * 1024
 
 func serverAddrStr() string {
-	return serverAddr
+	return config.Get().Server.Address
 }
 
 // Holds all the parsed HTML templates
@@ -74,7 +73,7 @@ func rootHandler() http.HandlerFunc {
 
 // Serves all pages at the specified address.
 func Start() {
-	addr := serverAddr
+	addr := config.Get().Server.Address
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(http.Dir("./static"))))

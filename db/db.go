@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"muzi/config"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -25,17 +27,7 @@ func CreateAllTables() error {
 }
 
 func GetDbUrl(dbName bool) string {
-	host := os.Getenv("PGHOST")
-	port := os.Getenv("PGPORT")
-	user := os.Getenv("PGUSER")
-	pass := os.Getenv("PGPASSWORD")
-
-	if dbName {
-		return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
-			user, pass, host, port, "muzi")
-	} else {
-		return fmt.Sprintf("postgres://%s:%s@%s:%s", user, pass, host, port)
-	}
+	return config.Get().Database.GetDbUrl(dbName)
 }
 
 func CreateDB() error {

@@ -119,7 +119,8 @@ func (h *LastFMHandler) handleHandshake(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Write([]byte(fmt.Sprintf("OK\n%s\nhttp://127.0.0.1:1234/2.0/\nhttp://127.0.0.1:1234/2.0/\n", sessionKey)))
+	baseURL := getBaseURL(r)
+	w.Write([]byte(fmt.Sprintf("OK\n%s\n%s/2.0/\n%s/2.0/\n", sessionKey, baseURL, baseURL)))
 }
 
 func (h *LastFMHandler) handleGetToken(w http.ResponseWriter, apiKey string) {

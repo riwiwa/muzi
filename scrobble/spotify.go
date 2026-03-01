@@ -401,11 +401,7 @@ func getBaseURL(r *http.Request) string {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	host := r.Host
-	if host == "localhost:1234" || host == "localhost" {
-		host = "127.0.0.1:1234"
-	}
-	return scheme + "://" + host
+	return scheme + "://" + r.Host
 }
 
 func GetSpotifyAuthURL(userId int, baseURL string) (string, error) {
