@@ -99,7 +99,7 @@ func generateAPIKeyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings?tab=scrobble", http.StatusSeeOther)
 }
 
 func updateSpotifyCredentialsHandler(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +132,7 @@ func updateSpotifyCredentialsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings?tab=scrobble", http.StatusSeeOther)
 }
 
 func spotifyConnectHandler(w http.ResponseWriter, r *http.Request) {
@@ -151,15 +151,15 @@ func spotifyConnectHandler(w http.ResponseWriter, r *http.Request) {
 	user, err := scrobble.GetUserById(userId)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "spotifyConnectHandler: GetUserById error: %v\n", err)
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings?tab=scrobble", http.StatusSeeOther)
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "spotifyConnectHandler: userId=%d, SpotifyClientId=%v\n", userId, user.SpotifyClientId)
+	fmt.Fprintf(os.Stderr, "spotifyConnectHandler: SpotifyClientId is nil or empty, redirecting to settings\n")
 
 	if user.SpotifyClientId == nil || *user.SpotifyClientId == "" {
 		fmt.Fprintf(os.Stderr, "spotifyConnectHandler: SpotifyClientId is nil or empty, redirecting to settings\n")
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings?tab=scrobble", http.StatusSeeOther)
 		return
 	}
 
