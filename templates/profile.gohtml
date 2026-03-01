@@ -7,10 +7,10 @@
     </div>
     <div class="profile-top-blank">
     </div>
-     <div class="user-stats-top">
-       <h3>{{formatInt .ScrobbleCount}}</h3> <p>Listens<p>
-       <h3>{{formatInt .ArtistCount}}</h3> <p>Artists<p>
-     </div>
+      <div class="user-stats-top">
+        <h3>{{formatInt .ScrobbleCount}}</h3> <p>Listens<p>
+        <h3>{{formatInt .ArtistCount}}</h3> <p>Artists<p>
+      </div>
   </div>
   <div class="history">
     <h3>Listening History</h3>
@@ -29,10 +29,11 @@
       {{end}}
       {{$artists := .Artists}}
       {{$times := .Times}}
+      {{$username := .Username}}
       {{range $index, $title := .Titles}}
       <tr>
-        <td>{{index $artists $index}}</td>
-        <td>{{$title}}</td>
+        <td><a href="/profile/{{$username}}/artist/{{urlquery (index $artists $index)}}">{{index $artists $index}}</a></td>
+        <td><a href="/profile/{{$username}}/song/{{urlquery $title}}">{{$title}}</a></td>
         <td title="{{formatTimestampFull (index $times $index)}}">{{formatTimestamp (index $times $index)}}</td>
       </tr>
       {{end}}

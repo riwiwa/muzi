@@ -13,6 +13,12 @@
         <span></span>
         <span></span>
       </div>
+
+      <!-- Search Bar -->
+      <div class="search-container">
+        <input type="text" id="globalSearch" placeholder="Search artists, songs, albums..." autocomplete="off">
+        <div id="searchResults" class="search-results"></div>
+      </div>
   
       <!-- Slide-out Menu -->
       <div class="side-menu" id="sideMenu">
@@ -44,6 +50,9 @@
       <!-- Main Content -->
       {{ if eq .TemplateName "profile"}}{{block "profile" .}}{{end}}{{end}}
       {{ if eq .TemplateName "settings"}}{{block "settings" .}}{{end}}{{end}}
+      {{ if eq .TemplateName "artist"}}{{block "artist" .}}{{end}}{{end}}
+      {{ if eq .TemplateName "song"}}{{block "song" .}}{{end}}{{end}}
+      {{ if eq .TemplateName "album"}}{{block "album" .}}{{end}}{{end}}
   
       <script src="/files/menu.js"></script>
     </body>

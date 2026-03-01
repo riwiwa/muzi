@@ -1,0 +1,58 @@
+{{define "album"}}
+  <div class="profile-top">
+    {{if .Album.CoverUrl}}
+    <img src="{{.Album.CoverUrl}}" alt="{{.Album.Title}}'s cover">
+    {{else}}
+    <img src="/files/assets/pfps/default.png" alt="{{.Album.Title}}'s cover">
+    {{end}}
+    <div class="username-bio">
+      <h1>{{.Album.Title}}</h1>
+      {{if .Artist.Name}}
+      <h2><a href="/profile/{{.Username}}/artist/{{urlquery .Artist.Name}}">{{.Artist.Name}}</a></h2>
+      {{end}}
+    </div>
+    <div class="profile-top-blank">
+    </div>
+      <div class="user-stats-top">
+        <h3>{{formatInt .ListenCount}}</h3> <p>Listens<p>
+      </div>
+  </div>
+  {{if eq .LoggedInUsername .Username}}
+  <div class="edit-section">
+    <h3>Edit Album</h3>
+    <form method="POST" action="/profile/{{.Username}}/album/{{.Album.Id}}/edit">
+      <label>Title: <input type="text" name="title" value="{{.Album.Title}}"></label>
+      <label>Cover URL: <input type="text" name="cover_url" value="{{.Album.CoverUrl}}"></label>
+      <label>Spotify ID: <input type="text" name="spotify_id" value="{{.Album.SpotifyId}}"></label>
+      <label>MusicBrainz ID: <input type="text" name="musicbrainz_id" value="{{.Album.MusicbrainzId}}"></label>
+      <button type="submit">Save</button>
+    </form>
+  </div>
+  {{end}}
+  <div class="history">
+    <h3>Scrobbles</h3>
+    <table>
+      <tr>
+        <th>Artist</th>
+        <th>Title</th>
+        <th>Album</th>
+        <th>Timestamp</th>
+      </tr>
+      {{$username := .Username}}
+      {{range .Times}}
+      <tr>
+        <td><a href="/profile/{{$username}}/artist/{{urlquery .ArtistName}}">{{.ArtistName}}</a></td>
+        <td><a href="/profile/{{$username}}/song/{{urlquery .SongName}}">{{.SongName}}</a></td>
+        <td>{{.AlbumName}}</td>
+        <td title="{{formatTimestampFull .Timestamp}}">{{formatTimestamp .Timestamp}}</td>
+      </tr>
+      {{end}}
+    </table>
+  </div>
+  <div class="page_buttons">
+    {{if gt .Page 1 }}
+    <a href="/profile/{{.Username}}/album/{{urlquery .Album.Title}}?page={{sub .Page 1}}">Prev Page</a>
+    {{end}}
+    <a href="/profile/{{.Username}}/album/{{urlquery .Album.Title}}?page={{add .Page 1}}">Next Page</a>
+  </div>
+{{end}}

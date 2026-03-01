@@ -14,6 +14,9 @@ import (
 var Pool *pgxpool.Pool
 
 func CreateAllTables() error {
+	if err := CreateExtensions(); err != nil {
+		return err
+	}
 	if err := CreateHistoryTable(); err != nil {
 		return err
 	}
@@ -23,7 +26,32 @@ func CreateAllTables() error {
 	if err := CreateSessionsTable(); err != nil {
 		return err
 	}
-	return CreateSpotifyLastTrackTable()
+	if err := CreateSpotifyLastTrackTable(); err != nil {
+		return err
+	}
+	if err := CreateArtistsTable(); err != nil {
+		return err
+	}
+	if err := CreateAlbumsTable(); err != nil {
+		return err
+	}
+	if err := CreateSongsTable(); err != nil {
+		return err
+	}
+	if err := AddHistoryEntityColumns(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func CreateExtensions() error {
+	_, err := Pool.Exec(context.Background(),
+		"CREATE EXTENSION IF NOT EXISTS pg_trgm;")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating pg_trgm extension: %v\n", err)
+		return err
+	}
+	return nil
 }
 
 func GetDbUrl(dbName bool) string {
@@ -149,6 +177,83 @@ func CreateSpotifyLastTrackTable() error {
 		);`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating spotify_last_track table: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func CreateArtistsTable() error {
+	_, err := Pool.Exec(context.Background(),
+		`CREATE TABLE IF NOT EXISTS artists (
+			id SERIAL PRIMARY KEY,
+			user_id INTEGER NOT NULL REFERENCES users(pk) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			image_url TEXT,
+			bio TEXT,
+			spotify_id TEXT,
+			musicbrainz_id TEXT,
+			UNIQUE (user_id, name)
+		);
+		CREATE INDEX IF NOT EXISTS idx_artists_user_name ON artists(user_id, name);
+		CREATE INDEX IF NOT EXISTS idx_artists_user_name_trgm ON artists USING gin(name gin_trgm_ops);`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating artists table: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func CreateAlbumsTable() error {
+	_, err := Pool.Exec(context.Background(),
+		`CREATE TABLE IF NOT EXISTS albums (
+			id SERIAL PRIMARY KEY,
+			user_id INTEGER NOT NULL REFERENCES users(pk) ON DELETE CASCADE,
+			title TEXT NOT NULL,
+			artist_id INTEGER REFERENCES artists(id) ON DELETE SET NULL,
+			cover_url TEXT,
+			spotify_id TEXT,
+			musicbrainz_id TEXT,
+			UNIQUE (user_id, title, artist_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_albums_user_title ON albums(user_id, title);
+		CREATE INDEX IF NOT EXISTS idx_albums_user_title_trgm ON albums USING gin(title gin_trgm_ops);`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating albums table: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func CreateSongsTable() error {
+	_, err := Pool.Exec(context.Background(),
+		`CREATE TABLE IF NOT EXISTS songs (
+			id SERIAL PRIMARY KEY,
+			user_id INTEGER NOT NULL REFERENCES users(pk) ON DELETE CASCADE,
+			title TEXT NOT NULL,
+			artist_id INTEGER REFERENCES artists(id) ON DELETE SET NULL,
+			album_id INTEGER REFERENCES albums(id) ON DELETE SET NULL,
+			duration_ms INTEGER,
+			spotify_id TEXT,
+			musicbrainz_id TEXT,
+			UNIQUE (user_id, title, artist_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_songs_user_title ON songs(user_id, title);
+		CREATE INDEX IF NOT EXISTS idx_songs_user_title_trgm ON songs USING gin(title gin_trgm_ops);`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating songs table: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func AddHistoryEntityColumns() error {
+	_, err := Pool.Exec(context.Background(),
+		`ALTER TABLE history ADD COLUMN IF NOT EXISTS artist_id INTEGER REFERENCES artists(id) ON DELETE SET NULL;
+		ALTER TABLE history ADD COLUMN IF NOT EXISTS song_id INTEGER REFERENCES songs(id) ON DELETE SET NULL;
+		CREATE INDEX IF NOT EXISTS idx_history_artist_id ON history(artist_id);
+		CREATE INDEX IF NOT EXISTS idx_history_song_id ON history(song_id);`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error adding history entity columns: %v\n", err)
 		return err
 	}
 	return nil

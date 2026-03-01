@@ -1,0 +1,57 @@
+{{define "artist"}}
+  <div class="profile-top">
+    {{if .Artist.ImageUrl}}
+    <img src="{{.Artist.ImageUrl}}" alt="{{.Artist.Name}}'s image">
+    {{else}}
+    <img src="/files/assets/pfps/default_artist.png" alt="{{.Artist.Name}}'s image">
+    {{end}}
+    <div class="username-bio">
+      <h1>{{.Artist.Name}}</h1>
+      <h2>{{.Artist.Bio}}</h2>
+    </div>
+    <div class="profile-top-blank">
+    </div>
+      <div class="user-stats-top">
+        <h3>{{formatInt .ListenCount}}</h3> <p>Listens<p>
+      </div>
+  </div>
+  {{if eq .LoggedInUsername .Username}}
+  <div class="edit-section">
+    <h3>Edit Artist</h3>
+    <form method="POST" action="/profile/{{.Username}}/artist/{{.Artist.Id}}/edit">
+      <label>Name: <input type="text" name="name" value="{{.Artist.Name}}"></label>
+      <label>Image URL: <input type="text" name="image_url" value="{{.Artist.ImageUrl}}"></label>
+      <label>Bio: <textarea name="bio">{{.Artist.Bio}}</textarea></label>
+      <label>Spotify ID: <input type="text" name="spotify_id" value="{{.Artist.SpotifyId}}"></label>
+      <label>MusicBrainz ID: <input type="text" name="musicbrainz_id" value="{{.Artist.MusicbrainzId}}"></label>
+      <button type="submit">Save</button>
+    </form>
+  </div>
+  {{end}}
+  <div class="history">
+    <h3>Scrobbles</h3>
+    <table>
+      <tr>
+        <th>Artist</th>
+        <th>Title</th>
+        <th>Album</th>
+        <th>Timestamp</th>
+      </tr>
+      {{$username := .Username}}
+      {{range .Times}}
+      <tr>
+        <td><a href="/profile/{{$username}}/artist/{{urlquery .ArtistName}}">{{.ArtistName}}</a></td>
+        <td><a href="/profile/{{$username}}/song/{{urlquery .SongName}}">{{.SongName}}</a></td>
+        <td><a href="/profile/{{$username}}/album/{{urlquery .AlbumName}}">{{.AlbumName}}</a></td>
+        <td title="{{formatTimestampFull .Timestamp}}">{{formatTimestamp .Timestamp}}</td>
+      </tr>
+      {{end}}
+    </table>
+  </div>
+  <div class="page_buttons">
+    {{if gt .Page 1 }}
+    <a href="/profile/{{.Username}}/artist/{{urlquery .Artist.Name}}?page={{sub .Page 1}}">Prev Page</a>
+    {{end}}
+    <a href="/profile/{{.Username}}/artist/{{urlquery .Artist.Name}}?page={{add .Page 1}}">Next Page</a>
+  </div>
+{{end}}

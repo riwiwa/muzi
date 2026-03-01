@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"os"
 
 	"muzi/config"
@@ -35,6 +36,7 @@ func init() {
 		"formatInt":           formatInt,
 		"formatTimestamp":     formatTimestamp,
 		"formatTimestampFull": formatTimestampFull,
+		"urlquery":            url.QueryEscape,
 	}
 	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("./templates/*.gohtml"))
 }
@@ -81,6 +83,13 @@ func Start() {
 	r.Get("/login", loginPageHandler())
 	r.Get("/createaccount", createAccountPageHandler())
 	r.Get("/profile/{username}", profilePageHandler())
+	r.Get("/profile/{username}/artist/{artist}", artistPageHandler())
+	r.Get("/profile/{username}/song/{song}", songPageHandler())
+	r.Get("/profile/{username}/album/{album}", albumPageHandler())
+	r.Post("/profile/{username}/artist/{id}/edit", editArtistHandler())
+	r.Post("/profile/{username}/song/{id}/edit", editSongHandler())
+	r.Post("/profile/{username}/album/{id}/edit", editAlbumHandler())
+	r.Get("/search", searchHandler())
 	r.Get("/import", importPageHandler())
 	r.Post("/loginsubmit", loginSubmit)
 	r.Post("/createaccountsubmit", createAccount)

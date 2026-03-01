@@ -118,12 +118,33 @@ func SaveScrobble(scrobble Scrobble) error {
 		return fmt.Errorf("duplicate scrobble")
 	}
 
+	artistId, _, err := db.GetOrCreateArtist(scrobble.UserId, scrobble.Artist)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting/creating artist: %v\n", err)
+		return err
+	}
+
+	var albumId int
+	if scrobble.Album != "" {
+		albumId, _, err = db.GetOrCreateAlbum(scrobble.UserId, scrobble.Album, artistId)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting/creating album: %v\n", err)
+			return err
+		}
+	}
+
+	songId, _, err := db.GetOrCreateSong(scrobble.UserId, scrobble.SongName, artistId, albumId)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting/creating song: %v\n", err)
+		return err
+	}
+
 	_, err = db.Pool.Exec(context.Background(),
-		`INSERT INTO history (user_id, timestamp, song_name, artist, album_name, ms_played, platform)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO history (user_id, timestamp, song_name, artist, album_name, ms_played, platform, artist_id, song_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (user_id, song_name, artist, timestamp) DO NOTHING`,
 		scrobble.UserId, scrobble.Timestamp, scrobble.SongName, scrobble.Artist,
-		scrobble.Album, scrobble.MsPlayed, scrobble.Platform)
+		scrobble.Album, scrobble.MsPlayed, scrobble.Platform, artistId, songId)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error saving scrobble: %v\n", err)
 		return err

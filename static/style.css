@@ -112,6 +112,93 @@
     filter: invert(1) brightness(1.5);
   }
 
+  /* Global Search */
+  .search-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1001;
+    width: 300px;
+    background: #222;
+    padding: 10px;
+    border-radius: 30px;
+  }
+
+  .search-container input {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid #444;
+    border-radius: 25px;
+    background: #333;
+    color: #AFA;
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .search-container input:focus {
+    border-color: #AFA;
+    background: #444;
+  }
+
+  .search-results {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 10px;
+    right: 10px;
+    background: #1a1a1a;
+    border: 1px solid #444;
+    border-radius: 8px;
+    margin-top: 5px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1002;
+  }
+
+  .search-results.active {
+    display: block;
+  }
+
+  .search-result-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #333;
+    text-decoration: none;
+  }
+
+  .search-result-item:last-child {
+    border-bottom: none;
+  }
+
+  .search-result-item:hover {
+    background: #333;
+  }
+
+  .search-result-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .search-result-name {
+    color: #FFF;
+    font-size: 14px;
+  }
+
+  .search-result-type {
+    color: #888;
+    font-size: 12px;
+  }
+
+  .search-result-count {
+    color: #AFA;
+    font-size: 12px;
+  }
+
   /* Menu Overlay */
   .menu-overlay {
     position: fixed;
@@ -124,11 +211,13 @@
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.3s ease, visibility 0.3s ease;
+    pointer-events: none;
   }
 
   .menu-overlay.active {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
   }
 
 .page_buttons {
@@ -226,6 +315,14 @@
   }
   tr:nth-child(even) {
     background-color: #111;
+  }
+  a {
+    color: #AFA;
+    text-decoration: none;
+  }
+  a:hover {
+    color: #FFF;
+    text-decoration: underline;
   }
 }
 
