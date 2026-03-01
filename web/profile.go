@@ -22,6 +22,7 @@ type ProfileData struct {
 	Pfp                 string
 	AllowDuplicateEdits bool
 	ScrobbleCount       int
+	TrackCount          int
 	ArtistCount         int
 	Artists             []string
 	Titles              []string
@@ -72,10 +73,11 @@ func profilePageHandler() http.HandlerFunc {
 			r.Context(),
 			`SELECT bio, pfp, allow_duplicate_edits,
 				(SELECT COUNT(*) FROM history WHERE user_id = $1) as scrobble_count,
+				(SELECT COUNT(*) FROM songs WHERE user_id = $1) as track_count,
 				(SELECT COUNT(DISTINCT artist) FROM history WHERE user_id = $1) as artist_count
 			FROM users WHERE pk = $1;`,
 			userId,
-		).Scan(&profileData.Bio, &profileData.Pfp, &profileData.AllowDuplicateEdits, &profileData.ScrobbleCount, &profileData.ArtistCount)
+		).Scan(&profileData.Bio, &profileData.Pfp, &profileData.AllowDuplicateEdits, &profileData.ScrobbleCount, &profileData.TrackCount, &profileData.ArtistCount)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot get profile for %s: %v\n", username, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
