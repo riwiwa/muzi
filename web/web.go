@@ -84,11 +84,35 @@ func Start() {
 	r.Get("/createaccount", createAccountPageHandler())
 	r.Get("/profile/{username}", profilePageHandler())
 	r.Get("/profile/{username}/artist/{artist}", artistPageHandler())
-	r.Get("/profile/{username}/song/{song}", songPageHandler())
-	r.Get("/profile/{username}/album/{album}", albumPageHandler())
+	r.Get("/profile/{username}/song/{artist}/{song}", songPageHandler())
+	r.Get("/profile/{username}/album/{artist}/{album}", albumPageHandler())
+	r.Get("/profile/{username}/album/{album}", func(w http.ResponseWriter, r *http.Request) {
+		username := chi.URLParam(r, "username")
+		albumTitle, _ := url.QueryUnescape(chi.URLParam(r, "album"))
+		userId, err := getUserIdByUsername(r.Context(), username)
+		if err != nil {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		albums, _, _ := db.SearchAlbums(userId, albumTitle)
+		if len(albums) > 0 {
+			album := albums[0]
+			artist, _ := db.GetArtistById(album.ArtistId)
+			http.Redirect(w, r, "/profile/"+username+"/album/"+url.QueryEscape(artist.Name)+"/"+url.QueryEscape(album.Title), http.StatusSeeOther)
+			return
+		}
+		http.Error(w, "Album not found", http.StatusNotFound)
+	})
 	r.Post("/profile/{username}/artist/{id}/edit", editArtistHandler())
 	r.Post("/profile/{username}/song/{id}/edit", editSongHandler())
 	r.Post("/profile/{username}/album/{id}/edit", editAlbumHandler())
+	r.Patch("/api/artist/{id}/edit", artistInlineEditHandler())
+	r.Patch("/api/song/{id}/edit", songInlineEditHandler())
+	r.Patch("/api/album/{id}/edit", albumInlineEditHandler())
+	r.Patch("/api/artist/{id}/batch", artistBatchEditHandler())
+	r.Patch("/api/song/{id}/batch", songBatchEditHandler())
+	r.Patch("/api/album/{id}/batch", albumBatchEditHandler())
+	r.Post("/api/upload/image", imageUploadHandler())
 	r.Get("/search", searchHandler())
 	r.Get("/import", importPageHandler())
 	r.Post("/loginsubmit", loginSubmit)

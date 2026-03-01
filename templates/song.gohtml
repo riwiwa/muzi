@@ -1,12 +1,17 @@
 {{define "song"}}
   <div class="profile-top">
     <div class="username-bio">
-      <h1>{{.Song.Title}}</h1>
+      <h1>
+        {{.Song.Title}}
+        {{if eq .LoggedInUsername .Username}}
+        <button class="edit-btn" onclick="openEditModal()">Edit</button>
+        {{end}}
+      </h1>
       {{if .Artist.Name}}
       <h2><a href="/profile/{{.Username}}/artist/{{urlquery .Artist.Name}}">{{.Artist.Name}}</a></h2>
       {{end}}
       {{if .Album.Title}}
-      <h3><a href="/profile/{{.Username}}/album/{{urlquery .Album.Title}}">{{.Album.Title}}</a></h3>
+      <h3><a href="/profile/{{.Username}}/album/{{urlquery .Artist.Name}}/{{urlquery .Album.Title}}">{{.Album.Title}}</a></h3>
       {{end}}
     </div>
     <div class="profile-top-blank">
@@ -15,17 +20,6 @@
         <h3>{{formatInt .ListenCount}}</h3> <p>Listens<p>
       </div>
   </div>
-  {{if eq .LoggedInUsername .Username}}
-  <div class="edit-section">
-    <h3>Edit Song</h3>
-    <form method="POST" action="/profile/{{.Username}}/song/{{.Song.Id}}/edit">
-      <label>Title: <input type="text" name="title" value="{{.Song.Title}}"></label>
-      <label>Spotify ID: <input type="text" name="spotify_id" value="{{.Song.SpotifyId}}"></label>
-      <label>MusicBrainz ID: <input type="text" name="musicbrainz_id" value="{{.Song.MusicbrainzId}}"></label>
-      <button type="submit">Save</button>
-    </form>
-  </div>
-  {{end}}
   <div class="history">
     <h3>Scrobbles</h3>
     <table>
@@ -39,7 +33,7 @@
       {{range .Times}}
       <tr>
         <td><a href="/profile/{{$username}}/artist/{{urlquery .ArtistName}}">{{.ArtistName}}</a></td>
-        <td><a href="/profile/{{$username}}/song/{{urlquery .SongName}}">{{.SongName}}</a></td>
+        <td><a href="/profile/{{$username}}/song/{{urlquery .ArtistName}}/{{urlquery .SongName}}">{{.SongName}}</a></td>
         <td><a href="/profile/{{$username}}/album/{{urlquery .AlbumName}}">{{.AlbumName}}</a></td>
         <td title="{{formatTimestampFull .Timestamp}}">{{formatTimestamp .Timestamp}}</td>
       </tr>
@@ -48,8 +42,25 @@
   </div>
   <div class="page_buttons">
     {{if gt .Page 1 }}
-    <a href="/profile/{{.Username}}/song/{{urlquery .Song.Title}}?page={{sub .Page 1}}">Prev Page</a>
+    <a href="/profile/{{.Username}}/song/{{urlquery .Artist.Name}}/{{urlquery .Song.Title}}?page={{sub .Page 1}}">Prev Page</a>
     {{end}}
-    <a href="/profile/{{.Username}}/song/{{urlquery .Song.Title}}?page={{add .Page 1}}">Next Page</a>
+    <a href="/profile/{{.Username}}/song/{{urlquery .Artist.Name}}/{{urlquery .Song.Title}}?page={{add .Page 1}}">Next Page</a>
   </div>
+
+  {{if eq .LoggedInUsername .Username}}
+  <div id="editModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+      <h2>Edit Song</h2>
+      <form id="editForm" data-entity="song" data-id="{{.Song.Id}}">
+        <label>Title: <input type="text" name="title" value="{{.Song.Title}}"></label>
+        <label>Spotify ID: <input type="text" name="spotify_id" value="{{.Song.SpotifyId}}"></label>
+        <label>MusicBrainz ID: <input type="text" name="musicbrainz_id" value="{{.Song.MusicbrainzId}}"></label>
+        <div class="modal-buttons">
+          <button type="button" class="cancel-btn" onclick="closeEditModal()">Cancel</button>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {{end}}
 {{end}}

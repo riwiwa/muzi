@@ -33,7 +33,7 @@
       {{range $index, $title := .Titles}}
       <tr>
         <td><a href="/profile/{{$username}}/artist/{{urlquery (index $artists $index)}}">{{index $artists $index}}</a></td>
-        <td><a href="/profile/{{$username}}/song/{{urlquery $title}}">{{$title}}</a></td>
+        <td><a href="/profile/{{$username}}/song/{{urlquery (index $artists $index)}}/{{urlquery $title}}">{{$title}}</a></td>
         <td title="{{formatTimestampFull (index $times $index)}}">{{formatTimestamp (index $times $index)}}</td>
       </tr>
       {{end}}

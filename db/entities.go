@@ -120,25 +120,27 @@ func UpdateArtist(id int, name, imageUrl, bio, spotifyId, musicbrainzId string) 
 	return err
 }
 
-func SearchArtists(userId int, query string) ([]Artist, error) {
+func SearchArtists(userId int, query string) ([]Artist, float64, error) {
 	likePattern := "%" + query + "%"
 	rows, err := Pool.Query(context.Background(),
-		`SELECT id, user_id, name, image_url, bio, spotify_id, musicbrainz_id 
+		`SELECT id, user_id, name, image_url, bio, spotify_id, musicbrainz_id, similarity(name, $2) as sim
 		FROM artists WHERE user_id = $1 AND (similarity(name, $2) > 0.1 OR LOWER(name) LIKE LOWER($3))
 		ORDER BY similarity(name, $2) DESC LIMIT 20`,
 		userId, query, likePattern)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	var artists []Artist
+	var maxSim float64
 	for rows.Next() {
 		var a Artist
 		var imageUrlPg, bioPg, spotifyIdPg, musicbrainzIdPg pgtype.Text
-		err := rows.Scan(&a.Id, &a.UserId, &a.Name, &imageUrlPg, &bioPg, &spotifyIdPg, &musicbrainzIdPg)
+		var sim float64
+		err := rows.Scan(&a.Id, &a.UserId, &a.Name, &imageUrlPg, &bioPg, &spotifyIdPg, &musicbrainzIdPg, &sim)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if imageUrlPg.Status == pgtype.Present {
 			a.ImageUrl = imageUrlPg.String
@@ -153,8 +155,11 @@ func SearchArtists(userId int, query string) ([]Artist, error) {
 			a.MusicbrainzId = musicbrainzIdPg.String
 		}
 		artists = append(artists, a)
+		if sim > maxSim {
+			maxSim = sim
+		}
 	}
-	return artists, nil
+	return artists, maxSim, nil
 }
 
 func GetOrCreateAlbum(userId int, title string, artistId int) (int, bool, error) {
@@ -232,31 +237,56 @@ func GetAlbumByName(userId int, title string, artistId int) (Album, error) {
 
 func UpdateAlbum(id int, title, coverUrl, spotifyId, musicbrainzId string) error {
 	_, err := Pool.Exec(context.Background(),
-		`UPDATE albums SET title = $1, cover_url = $2, spotify_id = $3, musicbrainz_id = $4 WHERE id = $5`,
+		`UPDATE albums SET 
+			title = COALESCE(NULLIF($1, ''), title),
+			cover_url = COALESCE(NULLIF($2, ''), cover_url),
+			spotify_id = COALESCE(NULLIF($3, ''), spotify_id),
+			musicbrainz_id = COALESCE(NULLIF($4, ''), musicbrainz_id)
+		WHERE id = $5`,
 		title, coverUrl, spotifyId, musicbrainzId, id)
 	return err
 }
 
-func SearchAlbums(userId int, query string) ([]Album, error) {
+func UpdateAlbumField(id int, field string, value string) error {
+	var query string
+	switch field {
+	case "title":
+		query = "UPDATE albums SET title = $1 WHERE id = $2"
+	case "cover_url":
+		query = "UPDATE albums SET cover_url = $1 WHERE id = $2"
+	case "spotify_id":
+		query = "UPDATE albums SET spotify_id = $1 WHERE id = $2"
+	case "musicbrainz_id":
+		query = "UPDATE albums SET musicbrainz_id = $1 WHERE id = $2"
+	default:
+		return fmt.Errorf("unknown field: %s", field)
+	}
+	_, err := Pool.Exec(context.Background(), query, value, id)
+	return err
+}
+
+func SearchAlbums(userId int, query string) ([]Album, float64, error) {
 	likePattern := "%" + query + "%"
 	rows, err := Pool.Query(context.Background(),
-		`SELECT id, user_id, title, artist_id, cover_url, spotify_id, musicbrainz_id 
+		`SELECT id, user_id, title, artist_id, cover_url, spotify_id, musicbrainz_id, similarity(title, $2) as sim
 		FROM albums WHERE user_id = $1 AND (similarity(title, $2) > 0.1 OR LOWER(title) LIKE LOWER($3))
 		ORDER BY similarity(title, $2) DESC LIMIT 20`,
 		userId, query, likePattern)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	var albums []Album
+	var maxSim float64
 	for rows.Next() {
 		var a Album
 		var artistIdVal int
 		var coverUrlPg, spotifyIdPg, musicbrainzIdPg pgtype.Text
-		err := rows.Scan(&a.Id, &a.UserId, &a.Title, &artistIdVal, &coverUrlPg, &spotifyIdPg, &musicbrainzIdPg)
+		var sim float64
+		err := rows.Scan(&a.Id, &a.UserId, &a.Title, &artistIdVal, &coverUrlPg, &spotifyIdPg, &musicbrainzIdPg, &sim)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		a.ArtistId = artistIdVal
 		if coverUrlPg.Status == pgtype.Present {
@@ -269,8 +299,11 @@ func SearchAlbums(userId int, query string) ([]Album, error) {
 			a.MusicbrainzId = musicbrainzIdPg.String
 		}
 		albums = append(albums, a)
+		if sim > maxSim {
+			maxSim = sim
+		}
 	}
-	return albums, nil
+	return albums, maxSim, nil
 }
 
 func GetOrCreateSong(userId int, title string, artistId int, albumId int) (int, bool, error) {
@@ -280,17 +313,26 @@ func GetOrCreateSong(userId int, title string, artistId int, albumId int) (int, 
 
 	var id int
 	err := Pool.QueryRow(context.Background(),
-		"SELECT id FROM songs WHERE user_id = $1 AND title = $2 AND (artist_id = $3 OR (artist_id IS NULL AND $3 IS NULL))",
-		userId, title, artistId).Scan(&id)
+		`SELECT id FROM songs 
+		WHERE user_id = $1 AND title = $2 AND artist_id = $3 
+		AND (album_id = $4 OR (album_id IS NULL AND $4 IS NULL))`,
+		userId, title, artistId, albumId).Scan(&id)
 	if err == nil {
 		return id, false, nil
 	}
 
+	var albumIdVal pgtype.Int4
+	if albumId > 0 {
+		albumIdVal = pgtype.Int4{Int: int32(albumId), Status: pgtype.Present}
+	} else {
+		albumIdVal.Status = pgtype.Null
+	}
+
 	err = Pool.QueryRow(context.Background(),
 		`INSERT INTO songs (user_id, title, artist_id, album_id) VALUES ($1, $2, $3, $4) 
-		ON CONFLICT (user_id, title, artist_id) DO UPDATE SET title = EXCLUDED.title
+		ON CONFLICT (user_id, title, artist_id, album_id) DO UPDATE SET album_id = EXCLUDED.album_id
 		RETURNING id`,
-		userId, title, artistId, albumId).Scan(&id)
+		userId, title, artistId, albumIdVal).Scan(&id)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating song: %v\n", err)
 		return 0, false, err
@@ -312,7 +354,7 @@ func GetSongById(id int) (Song, error) {
 
 func GetSongByName(userId int, title string, artistId int) (Song, error) {
 	var song Song
-	var artistIdVal, albumIdVal int
+	var artistIdVal, albumIdVal pgtype.Int4
 	var durationMs *int
 	var spotifyIdPg, musicbrainzIdPg pgtype.Text
 
@@ -334,8 +376,12 @@ func GetSongByName(userId int, title string, artistId int) (Song, error) {
 	if err != nil {
 		return Song{}, err
 	}
-	song.ArtistId = artistIdVal
-	song.AlbumId = albumIdVal
+	if artistIdVal.Status == pgtype.Present {
+		song.ArtistId = int(artistIdVal.Int)
+	}
+	if albumIdVal.Status == pgtype.Present {
+		song.AlbumId = int(albumIdVal.Int)
+	}
 	if durationMs != nil {
 		song.DurationMs = *durationMs
 	}
@@ -355,30 +401,35 @@ func UpdateSong(id int, title string, durationMs int, spotifyId, musicbrainzId s
 	return err
 }
 
-func SearchSongs(userId int, query string) ([]Song, error) {
+func SearchSongs(userId int, query string) ([]Song, float64, error) {
 	likePattern := "%" + query + "%"
 	rows, err := Pool.Query(context.Background(),
-		`SELECT id, user_id, title, artist_id, album_id, duration_ms, spotify_id, musicbrainz_id 
+		`SELECT id, user_id, title, artist_id, album_id, duration_ms, spotify_id, musicbrainz_id, similarity(title, $2) as sim
 		FROM songs WHERE user_id = $1 AND (similarity(title, $2) > 0.1 OR LOWER(title) LIKE LOWER($3))
 		ORDER BY similarity(title, $2) DESC LIMIT 20`,
 		userId, query, likePattern)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	var songs []Song
+	var maxSim float64
 	for rows.Next() {
 		var s Song
-		var artistIdVal, albumIdVal, durationMsVal int
+		var artistIdVal, albumIdVal int
+		var durationMsVal *int
 		var spotifyIdPg, musicbrainzIdPg pgtype.Text
-		err := rows.Scan(&s.Id, &s.UserId, &s.Title, &artistIdVal, &albumIdVal, &durationMsVal, &spotifyIdPg, &musicbrainzIdPg)
+		var sim float64
+		err := rows.Scan(&s.Id, &s.UserId, &s.Title, &artistIdVal, &albumIdVal, &durationMsVal, &spotifyIdPg, &musicbrainzIdPg, &sim)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		s.ArtistId = artistIdVal
 		s.AlbumId = albumIdVal
-		s.DurationMs = durationMsVal
+		if durationMsVal != nil {
+			s.DurationMs = *durationMsVal
+		}
 		if spotifyIdPg.Status == pgtype.Present {
 			s.SpotifyId = spotifyIdPg.String
 		}
@@ -386,8 +437,11 @@ func SearchSongs(userId int, query string) ([]Song, error) {
 			s.MusicbrainzId = musicbrainzIdPg.String
 		}
 		songs = append(songs, s)
+		if sim > maxSim {
+			maxSim = sim
+		}
 	}
-	return songs, nil
+	return songs, maxSim, nil
 }
 
 func GetArtistStats(userId, artistId int) (int, error) {

@@ -1,12 +1,17 @@
 {{define "album"}}
   <div class="profile-top">
     {{if .Album.CoverUrl}}
-    <img src="{{.Album.CoverUrl}}" alt="{{.Album.Title}}'s cover">
+    <img class="editable-image album-cover" data-entity="album" data-id="{{.Album.Id}}" data-field="cover_url" src="{{.Album.CoverUrl}}" alt="{{.Album.Title}}'s cover">
     {{else}}
-    <img src="/files/assets/pfps/default.png" alt="{{.Album.Title}}'s cover">
+    <img class="editable-image album-cover" data-entity="album" data-id="{{.Album.Id}}" data-field="cover_url" src="/files/assets/pfps/default_album.png" alt="{{.Album.Title}}'s cover">
     {{end}}
     <div class="username-bio">
-      <h1>{{.Album.Title}}</h1>
+      <h1>
+        {{.Album.Title}}
+        {{if eq .LoggedInUsername .Username}}
+        <button class="edit-btn" onclick="openEditModal()">Edit</button>
+        {{end}}
+      </h1>
       {{if .Artist.Name}}
       <h2><a href="/profile/{{.Username}}/artist/{{urlquery .Artist.Name}}">{{.Artist.Name}}</a></h2>
       {{end}}
@@ -17,18 +22,6 @@
         <h3>{{formatInt .ListenCount}}</h3> <p>Listens<p>
       </div>
   </div>
-  {{if eq .LoggedInUsername .Username}}
-  <div class="edit-section">
-    <h3>Edit Album</h3>
-    <form method="POST" action="/profile/{{.Username}}/album/{{.Album.Id}}/edit">
-      <label>Title: <input type="text" name="title" value="{{.Album.Title}}"></label>
-      <label>Cover URL: <input type="text" name="cover_url" value="{{.Album.CoverUrl}}"></label>
-      <label>Spotify ID: <input type="text" name="spotify_id" value="{{.Album.SpotifyId}}"></label>
-      <label>MusicBrainz ID: <input type="text" name="musicbrainz_id" value="{{.Album.MusicbrainzId}}"></label>
-      <button type="submit">Save</button>
-    </form>
-  </div>
-  {{end}}
   <div class="history">
     <h3>Scrobbles</h3>
     <table>
@@ -42,7 +35,7 @@
       {{range .Times}}
       <tr>
         <td><a href="/profile/{{$username}}/artist/{{urlquery .ArtistName}}">{{.ArtistName}}</a></td>
-        <td><a href="/profile/{{$username}}/song/{{urlquery .SongName}}">{{.SongName}}</a></td>
+        <td><a href="/profile/{{$username}}/song/{{urlquery .ArtistName}}/{{urlquery .SongName}}">{{.SongName}}</a></td>
         <td>{{.AlbumName}}</td>
         <td title="{{formatTimestampFull .Timestamp}}">{{formatTimestamp .Timestamp}}</td>
       </tr>
@@ -51,8 +44,25 @@
   </div>
   <div class="page_buttons">
     {{if gt .Page 1 }}
-    <a href="/profile/{{.Username}}/album/{{urlquery .Album.Title}}?page={{sub .Page 1}}">Prev Page</a>
+    <a href="/profile/{{.Username}}/album/{{urlquery .Artist.Name}}/{{urlquery .Album.Title}}?page={{sub .Page 1}}">Prev Page</a>
     {{end}}
-    <a href="/profile/{{.Username}}/album/{{urlquery .Album.Title}}?page={{add .Page 1}}">Next Page</a>
+    <a href="/profile/{{.Username}}/album/{{urlquery .Artist.Name}}/{{urlquery .Album.Title}}?page={{add .Page 1}}">Next Page</a>
   </div>
+
+  {{if eq .LoggedInUsername .Username}}
+  <div id="editModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+      <h2>Edit Album</h2>
+      <form id="editForm" data-entity="album" data-id="{{.Album.Id}}">
+        <label>Title: <input type="text" name="title" value="{{.Album.Title}}"></label>
+        <label>Spotify ID: <input type="text" name="spotify_id" value="{{.Album.SpotifyId}}"></label>
+        <label>MusicBrainz ID: <input type="text" name="musicbrainz_id" value="{{.Album.MusicbrainzId}}"></label>
+        <div class="modal-buttons">
+          <button type="button" class="cancel-btn" onclick="closeEditModal()">Cancel</button>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {{end}}
 {{end}}
