@@ -394,6 +394,58 @@ func GetSongByName(userId int, title string, artistId int) (Song, error) {
 	return song, nil
 }
 
+func GetSongsByName(userId int, title string, artistId int) ([]Song, error) {
+	var query string
+	var args []interface{}
+	if artistId > 0 {
+		query = `SELECT id, user_id, title, artist_id, album_id, duration_ms, spotify_id, musicbrainz_id 
+			FROM songs WHERE user_id = $1 AND title = $2 AND artist_id = $3 ORDER BY id`
+		args = []interface{}{userId, title, artistId}
+	} else {
+		query = `SELECT id, user_id, title, artist_id, album_id, duration_ms, spotify_id, musicbrainz_id 
+			FROM songs WHERE user_id = $1 AND title = $2 ORDER BY id`
+		args = []interface{}{userId, title}
+	}
+
+	rows, err := Pool.Query(context.Background(), query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var songs []Song
+	for rows.Next() {
+		var song Song
+		var artistIdVal, albumIdVal pgtype.Int4
+		var durationMs *int
+		var spotifyIdPg, musicbrainzIdPg pgtype.Text
+
+		err := rows.Scan(
+			&song.Id, &song.UserId, &song.Title, &artistIdVal, &albumIdVal,
+			&durationMs, &spotifyIdPg, &musicbrainzIdPg)
+		if err != nil {
+			return nil, err
+		}
+		if artistIdVal.Status == pgtype.Present {
+			song.ArtistId = int(artistIdVal.Int)
+		}
+		if albumIdVal.Status == pgtype.Present {
+			song.AlbumId = int(albumIdVal.Int)
+		}
+		if durationMs != nil {
+			song.DurationMs = *durationMs
+		}
+		if spotifyIdPg.Status == pgtype.Present {
+			song.SpotifyId = spotifyIdPg.String
+		}
+		if musicbrainzIdPg.Status == pgtype.Present {
+			song.MusicbrainzId = musicbrainzIdPg.String
+		}
+		songs = append(songs, song)
+	}
+	return songs, nil
+}
+
 func UpdateSong(id int, title string, durationMs int, spotifyId, musicbrainzId string) error {
 	_, err := Pool.Exec(context.Background(),
 		`UPDATE songs SET title = $1, duration_ms = $2, spotify_id = $3, musicbrainz_id = $4 WHERE id = $5`,
@@ -657,6 +709,44 @@ func GetHistoryForAlbum(userId, albumId int, limit, offset int) ([]ScrobbleEntry
 		WHERE h.user_id = $1 AND s.album_id = $2 
 		ORDER BY h.timestamp DESC LIMIT $3 OFFSET $4`,
 		userId, albumId, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []ScrobbleEntry
+	for rows.Next() {
+		var e ScrobbleEntry
+		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+func GetSongStatsForSongs(userId int, songIds []int) (int, error) {
+	if len(songIds) == 0 {
+		return 0, nil
+	}
+	var count int
+	err := Pool.QueryRow(context.Background(),
+		"SELECT COUNT(*) FROM history WHERE user_id = $1 AND song_id = ANY($2)",
+		userId, songIds).Scan(&count)
+	return count, err
+}
+
+func GetHistoryForSongs(userId int, songIds []int, limit, offset int) ([]ScrobbleEntry, error) {
+	if len(songIds) == 0 {
+		return []ScrobbleEntry{}, nil
+	}
+	rows, err := Pool.Query(context.Background(),
+		`SELECT h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
+			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name
+		FROM history h WHERE h.user_id = $1 AND h.song_id = ANY($2) 
+		ORDER BY h.timestamp DESC LIMIT $3 OFFSET $4`,
+		userId, songIds, limit, offset)
 	if err != nil {
 		return nil, err
 	}

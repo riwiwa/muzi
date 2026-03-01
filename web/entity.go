@@ -35,7 +35,7 @@ type SongData struct {
 	Username         string
 	Song             db.Song
 	Artist           db.Artist
-	Album            db.Album
+	Albums           []db.Album
 	ListenCount      int
 	Times            []db.ScrobbleEntry
 	Page             int
@@ -151,11 +151,11 @@ func songPageHandler() http.HandlerFunc {
 			return
 		}
 
-		song, err := db.GetSongByName(userId, songTitle, artist.Id)
-		if err != nil {
-			songs, _, searchErr := db.SearchSongs(userId, songTitle)
-			if searchErr == nil && len(songs) > 0 {
-				song = songs[0]
+		songs, err := db.GetSongsByName(userId, songTitle, artist.Id)
+		if err != nil || len(songs) == 0 {
+			songList, _, searchErr := db.SearchSongs(userId, songTitle)
+			if searchErr == nil && len(songList) > 0 {
+				songs = songList
 			} else {
 				fmt.Fprintf(os.Stderr, "Cannot find song %s: %v\n", songTitle, err)
 				http.Error(w, "Song not found", http.StatusNotFound)
@@ -163,10 +163,19 @@ func songPageHandler() http.HandlerFunc {
 			}
 		}
 
+		song := songs[0]
 		artist, _ = db.GetArtistById(song.ArtistId)
-		var album db.Album
-		if song.AlbumId > 0 {
-			album, _ = db.GetAlbumById(song.AlbumId)
+
+		var songIds []int
+		var albums []db.Album
+		seenAlbums := make(map[int]bool)
+		for _, s := range songs {
+			songIds = append(songIds, s.Id)
+			if s.AlbumId > 0 && !seenAlbums[s.AlbumId] {
+				seenAlbums[s.AlbumId] = true
+				album, _ := db.GetAlbumById(s.AlbumId)
+				albums = append(albums, album)
+			}
 		}
 
 		pageStr := r.URL.Query().Get("page")
@@ -183,12 +192,12 @@ func songPageHandler() http.HandlerFunc {
 		lim := 15
 		off := (pageInt - 1) * lim
 
-		listenCount, err := db.GetSongStats(userId, song.Id)
+		listenCount, err := db.GetSongStatsForSongs(userId, songIds)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot get song stats: %v\n", err)
 		}
 
-		entries, err := db.GetHistoryForSong(userId, song.Id, lim, off)
+		entries, err := db.GetHistoryForSongs(userId, songIds, lim, off)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot get history for song: %v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -199,7 +208,7 @@ func songPageHandler() http.HandlerFunc {
 			Username:         username,
 			Song:             song,
 			Artist:           artist,
-			Album:            album,
+			Albums:           albums,
 			ListenCount:      listenCount,
 			Times:            entries,
 			Page:             pageInt,

@@ -10,8 +10,8 @@
       {{if .Artist.Name}}
       <h2><a href="/profile/{{.Username}}/artist/{{urlquery .Artist.Name}}">{{.Artist.Name}}</a></h2>
       {{end}}
-      {{if .Album.Title}}
-      <h3><a href="/profile/{{.Username}}/album/{{urlquery .Artist.Name}}/{{urlquery .Album.Title}}">{{.Album.Title}}</a></h3>
+      {{range .Albums}}
+      <h3><a href="/profile/{{$.Username}}/album/{{urlquery $.Artist.Name}}/{{urlquery .Title}}">{{.Title}}</a></h3>
       {{end}}
     </div>
     <div class="profile-top-blank">
@@ -34,7 +34,7 @@
       <tr>
         <td><a href="/profile/{{$username}}/artist/{{urlquery .ArtistName}}">{{.ArtistName}}</a></td>
         <td><a href="/profile/{{$username}}/song/{{urlquery .ArtistName}}/{{urlquery .SongName}}">{{.SongName}}</a></td>
-        <td><a href="/profile/{{$username}}/album/{{urlquery .AlbumName}}">{{.AlbumName}}</a></td>
+        <td><a href="/profile/{{$username}}/album/{{urlquery .ArtistName}}/{{urlquery .AlbumName}}">{{.AlbumName}}</a></td>
         <td title="{{formatTimestampFull .Timestamp}}">{{formatTimestamp .Timestamp}}</td>
       </tr>
       {{end}}
