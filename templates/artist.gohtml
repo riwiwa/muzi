@@ -31,7 +31,10 @@
       {{$username := .Username}}
       {{range .Times}}
       <tr>
-        <td><a href="/profile/{{$username}}/artist/{{urlquery .ArtistName}}">{{.ArtistName}}</a></td>
+        <td>
+          {{- $artistNames := getArtistNames .ArtistIds}}
+          {{- range $i, $name := $artistNames}}{{if $i}}, {{end}}<a href="/profile/{{$username}}/artist/{{urlquery $name}}">{{$name}}</a>{{end}}
+        </td>
         <td><a href="/profile/{{$username}}/song/{{urlquery .ArtistName}}/{{urlquery .SongName}}">{{.SongName}}</a></td>
         <td><a href="/profile/{{$username}}/album/{{urlquery .ArtistName}}/{{urlquery .AlbumName}}">{{.AlbumName}}</a></td>
         <td title="{{formatTimestampFull .Timestamp}}">{{formatTimestamp .Timestamp}}</td>

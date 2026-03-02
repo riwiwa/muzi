@@ -236,20 +236,65 @@ func ImportLastFM(
 }
 
 func insertBatch(tracks []LastFMTrack, totalImported *int) error {
+	if len(tracks) == 0 {
+		return nil
+	}
+
+	artistIdMap, err := resolveLastFMArtistIds(tracks)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error resolving artist IDs: %v\n", err)
+		return err
+	}
+
+	rows := make([][]any, 0, len(tracks))
+	for _, t := range tracks {
+		artistNames := parseArtistString(t.Artist)
+		var artistIds []int
+		for _, name := range artistNames {
+			if ids, ok := artistIdMap[name]; ok {
+				artistIds = append(artistIds, ids...)
+			}
+		}
+
+		primaryArtistId := 0
+		if len(artistIds) > 0 {
+			primaryArtistId = artistIds[0]
+		}
+
+		rows = append(rows, []any{
+			t.UserId, t.Timestamp, t.SongName, t.Artist,
+			t.Album, 0, "lastfm", primaryArtistId, artistIds,
+		})
+	}
+
 	copyCount, err := db.Pool.CopyFrom(context.Background(),
 		pgx.Identifier{"history"},
 		[]string{
 			"user_id", "timestamp", "song_name", "artist", "album_name",
-			"ms_played", "platform",
+			"ms_played", "platform", "artist_id", "artist_ids",
 		},
-		pgx.CopyFromSlice(len(tracks), func(i int) ([]any, error) {
-			t := tracks[i]
-			return []any{
-				t.UserId, t.Timestamp, t.SongName, t.Artist,
-				t.Album, 0, "lastfm",
-			}, nil
-		}),
+		pgx.CopyFromRows(rows),
 	)
 	*totalImported += int(copyCount)
 	return err
+}
+
+func resolveLastFMArtistIds(tracks []LastFMTrack) (map[string][]int, error) {
+	artistIdMap := make(map[string][]int)
+
+	for _, t := range tracks {
+		artistNames := parseArtistString(t.Artist)
+		for _, name := range artistNames {
+			if _, exists := artistIdMap[name]; !exists {
+				artistId, _, err := db.GetOrCreateArtist(t.UserId, name)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error creating artist %s: %v\n", name, err)
+					continue
+				}
+				artistIdMap[name] = []int{artistId}
+			}
+		}
+	}
+
+	return artistIdMap, nil
 }

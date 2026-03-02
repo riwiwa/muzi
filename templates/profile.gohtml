@@ -28,13 +28,17 @@
         <td>Now Playing</td>
       </tr>
       {{end}}
-      {{$artists := .Artists}}
+      {{$artistIdsList := .ArtistIdsList}}
       {{$times := .Times}}
       {{$username := .Username}}
       {{range $index, $title := .Titles}}
       <tr>
-        <td><a href="/profile/{{$username}}/artist/{{urlquery (index $artists $index)}}">{{index $artists $index}}</a></td>
-        <td><a href="/profile/{{$username}}/song/{{urlquery (index $artists $index)}}/{{urlquery $title}}">{{$title}}</a></td>
+        <td>
+          {{- $artistIds := index $artistIdsList $index}}
+          {{- $artistNames := getArtistNames $artistIds}}
+          {{- range $i, $name := $artistNames}}{{if $i}}, {{end}}<a href="/profile/{{$username}}/artist/{{urlquery $name}}">{{$name}}</a>{{end}}
+        </td>
+        <td><a href="/profile/{{$username}}/song/{{urlquery (index $.Artists $index)}}/{{urlquery $title}}">{{$title}}</a></td>
         <td title="{{formatTimestampFull (index $times $index)}}">{{formatTimestamp (index $times $index)}}</td>
       </tr>
       {{end}}

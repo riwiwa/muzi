@@ -25,6 +25,7 @@ type ProfileData struct {
 	TrackCount          int
 	ArtistCount         int
 	Artists             []string
+	ArtistIdsList       [][]int
 	Titles              []string
 	Times               []time.Time
 	Page                int
@@ -93,7 +94,7 @@ func profilePageHandler() http.HandlerFunc {
 
 		rows, err := db.Pool.Query(
 			r.Context(),
-			"SELECT artist, song_name, timestamp FROM history WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2 OFFSET $3;",
+			"SELECT artist_id, song_name, timestamp, artist_ids FROM history WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2 OFFSET $3;",
 			userId,
 			lim,
 			off,
@@ -106,15 +107,27 @@ func profilePageHandler() http.HandlerFunc {
 		defer rows.Close()
 
 		for rows.Next() {
-			var artist, title string
+			var artistId int
+			var title string
 			var time pgtype.Timestamptz
-			err = rows.Scan(&artist, &title, &time)
+			var artistIds []int
+			err = rows.Scan(&artistId, &title, &time, &artistIds)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Scanning history row failed: %v\n", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			profileData.Artists = append(profileData.Artists, artist)
+
+			var artistName string
+			if artistId > 0 {
+				artist, err := db.GetArtistById(artistId)
+				if err == nil {
+					artistName = artist.Name
+				}
+			}
+
+			profileData.Artists = append(profileData.Artists, artistName)
+			profileData.ArtistIdsList = append(profileData.ArtistIdsList, artistIds)
 			profileData.Titles = append(profileData.Titles, title)
 			profileData.Times = append(profileData.Times, time.Time)
 		}

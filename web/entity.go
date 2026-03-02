@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -35,6 +36,7 @@ type SongData struct {
 	Username         string
 	Song             db.Song
 	Artist           db.Artist
+	ArtistNames      []string
 	Albums           []db.Album
 	ListenCount      int
 	Times            []db.ScrobbleEntry
@@ -48,6 +50,7 @@ type AlbumData struct {
 	Username         string
 	Album            db.Album
 	Artist           db.Artist
+	ArtistNames      []string
 	ListenCount      int
 	Times            []db.ScrobbleEntry
 	Page             int
@@ -169,12 +172,41 @@ func songPageHandler() http.HandlerFunc {
 		var songIds []int
 		var albums []db.Album
 		seenAlbums := make(map[int]bool)
+		seenArtistIds := make(map[int]bool)
+		var allArtistIds []int
 		for _, s := range songs {
 			songIds = append(songIds, s.Id)
+			if s.ArtistId > 0 && !seenArtistIds[s.ArtistId] {
+				seenArtistIds[s.ArtistId] = true
+				allArtistIds = append(allArtistIds, s.ArtistId)
+			}
 			if s.AlbumId > 0 && !seenAlbums[s.AlbumId] {
 				seenAlbums[s.AlbumId] = true
 				album, _ := db.GetAlbumById(s.AlbumId)
 				albums = append(albums, album)
+			}
+		}
+
+		var artistNames []string
+		seenArtistIdsMap := make(map[int]bool)
+		rows, err := db.Pool.Query(context.Background(),
+			`SELECT DISTINCT artist_ids FROM history WHERE song_id = ANY($1)`,
+			songIds)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var artistIds []int
+				if err := rows.Scan(&artistIds); err == nil {
+					for _, id := range artistIds {
+						if !seenArtistIdsMap[id] {
+							seenArtistIdsMap[id] = true
+							a, err := db.GetArtistById(id)
+							if err == nil {
+								artistNames = append(artistNames, a.Name)
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -208,6 +240,7 @@ func songPageHandler() http.HandlerFunc {
 			Username:         username,
 			Song:             song,
 			Artist:           artist,
+			ArtistNames:      artistNames,
 			Albums:           albums,
 			ListenCount:      listenCount,
 			Times:            entries,
@@ -375,10 +408,25 @@ func albumPageHandler() http.HandlerFunc {
 			return
 		}
 
+		var artistNames []string
+		seenArtistIds := make(map[int]bool)
+		for _, e := range entries {
+			for _, artistId := range e.ArtistIds {
+				if !seenArtistIds[artistId] {
+					seenArtistIds[artistId] = true
+					a, err := db.GetArtistById(artistId)
+					if err == nil {
+						artistNames = append(artistNames, a.Name)
+					}
+				}
+			}
+		}
+
 		albumData := AlbumData{
 			Username:         username,
 			Album:            album,
 			Artist:           artist,
+			ArtistNames:      artistNames,
 			ListenCount:      listenCount,
 			Times:            entries,
 			Page:             pageInt,

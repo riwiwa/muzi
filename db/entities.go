@@ -499,7 +499,7 @@ func SearchSongs(userId int, query string) ([]Song, float64, error) {
 func GetArtistStats(userId, artistId int) (int, error) {
 	var count int
 	err := Pool.QueryRow(context.Background(),
-		"SELECT COUNT(*) FROM history WHERE user_id = $1 AND artist_id = $2",
+		"SELECT COUNT(*) FROM history WHERE user_id = $1 AND $2 = ANY(artist_ids)",
 		userId, artistId).Scan(&count)
 	return count, err
 }
@@ -534,8 +534,9 @@ func MergeArtists(userId int, fromArtistId, toArtistId int) error {
 func GetHistoryForArtist(userId, artistId int, limit, offset int) ([]ScrobbleEntry, error) {
 	rows, err := Pool.Query(context.Background(),
 		`SELECT h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
-			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name
-		FROM history h WHERE h.user_id = $1 AND h.artist_id = $2 
+			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name,
+			h.artist_ids
+		FROM history h WHERE h.user_id = $1 AND $2 = ANY(h.artist_ids) 
 		ORDER BY h.timestamp DESC LIMIT $3 OFFSET $4`,
 		userId, artistId, limit, offset)
 	if err != nil {
@@ -546,7 +547,7 @@ func GetHistoryForArtist(userId, artistId int, limit, offset int) ([]ScrobbleEnt
 	var entries []ScrobbleEntry
 	for rows.Next() {
 		var e ScrobbleEntry
-		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName)
+		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName, &e.ArtistIds)
 		if err != nil {
 			return nil, err
 		}
@@ -558,7 +559,8 @@ func GetHistoryForArtist(userId, artistId int, limit, offset int) ([]ScrobbleEnt
 func GetHistoryForSong(userId, songId int, limit, offset int) ([]ScrobbleEntry, error) {
 	rows, err := Pool.Query(context.Background(),
 		`SELECT h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
-			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name
+			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name,
+			h.artist_ids
 		FROM history h WHERE h.user_id = $1 AND h.song_id = $2 
 		ORDER BY h.timestamp DESC LIMIT $3 OFFSET $4`,
 		userId, songId, limit, offset)
@@ -570,7 +572,7 @@ func GetHistoryForSong(userId, songId int, limit, offset int) ([]ScrobbleEntry, 
 	var entries []ScrobbleEntry
 	for rows.Next() {
 		var e ScrobbleEntry
-		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName)
+		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName, &e.ArtistIds)
 		if err != nil {
 			return nil, err
 		}
@@ -586,6 +588,7 @@ type ScrobbleEntry struct {
 	AlbumName  string
 	MsPlayed   int
 	Platform   string
+	ArtistIds  []int
 }
 
 func MigrateHistoryEntities() error {
@@ -703,7 +706,8 @@ func GetAlbumStats(userId, albumId int) (int, error) {
 func GetHistoryForAlbum(userId, albumId int, limit, offset int) ([]ScrobbleEntry, error) {
 	rows, err := Pool.Query(context.Background(),
 		`SELECT h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
-			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name
+			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name,
+			h.artist_ids
 		FROM history h
 		JOIN songs s ON h.song_id = s.id
 		WHERE h.user_id = $1 AND s.album_id = $2 
@@ -717,7 +721,7 @@ func GetHistoryForAlbum(userId, albumId int, limit, offset int) ([]ScrobbleEntry
 	var entries []ScrobbleEntry
 	for rows.Next() {
 		var e ScrobbleEntry
-		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName)
+		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName, &e.ArtistIds)
 		if err != nil {
 			return nil, err
 		}
@@ -743,7 +747,8 @@ func GetHistoryForSongs(userId int, songIds []int, limit, offset int) ([]Scrobbl
 	}
 	rows, err := Pool.Query(context.Background(),
 		`SELECT h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
-			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name
+			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name,
+			h.artist_ids
 		FROM history h WHERE h.user_id = $1 AND h.song_id = ANY($2) 
 		ORDER BY h.timestamp DESC LIMIT $3 OFFSET $4`,
 		userId, songIds, limit, offset)
@@ -755,7 +760,7 @@ func GetHistoryForSongs(userId int, songIds []int, limit, offset int) ([]Scrobbl
 	var entries []ScrobbleEntry
 	for rows.Next() {
 		var e ScrobbleEntry
-		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName)
+		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName, &e.ArtistIds)
 		if err != nil {
 			return nil, err
 		}

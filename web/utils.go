@@ -5,6 +5,8 @@ package web
 import (
 	"fmt"
 	"time"
+
+	"muzi/db"
 )
 
 // Subtracts two integers
@@ -55,4 +57,19 @@ func formatTimestamp(timestamp time.Time) string {
 // Full timestamp format for browser hover
 func formatTimestampFull(timestamp time.Time) string {
 	return timestamp.Format("Monday 2 Jan 2006, 3:04pm")
+}
+
+// GetArtistNames takes artist IDs and returns a slice of artist names
+func GetArtistNames(artistIds []int) []string {
+	if artistIds == nil {
+		return nil
+	}
+	var names []string
+	for _, id := range artistIds {
+		artist, err := db.GetArtistById(id)
+		if err == nil {
+			names = append(names, artist.Name)
+		}
+	}
+	return names
 }

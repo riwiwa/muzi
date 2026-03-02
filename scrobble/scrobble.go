@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"muzi/db"
@@ -118,38 +119,70 @@ func SaveScrobble(scrobble Scrobble) error {
 		return fmt.Errorf("duplicate scrobble")
 	}
 
-	artistId, _, err := db.GetOrCreateArtist(scrobble.UserId, scrobble.Artist)
+	artistNames := parseArtistString(scrobble.Artist)
+	artistIds, err := getOrCreateArtists(scrobble.UserId, artistNames)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting/creating artist: %v\n", err)
 		return err
+	}
+
+	primaryArtistId := 0
+	if len(artistIds) > 0 {
+		primaryArtistId = artistIds[0]
 	}
 
 	var albumId int
 	if scrobble.Album != "" {
-		albumId, _, err = db.GetOrCreateAlbum(scrobble.UserId, scrobble.Album, artistId)
+		albumId, _, err = db.GetOrCreateAlbum(scrobble.UserId, scrobble.Album, primaryArtistId)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error getting/creating album: %v\n", err)
 			return err
 		}
 	}
 
-	songId, _, err := db.GetOrCreateSong(scrobble.UserId, scrobble.SongName, artistId, albumId)
+	songId, _, err := db.GetOrCreateSong(scrobble.UserId, scrobble.SongName, primaryArtistId, albumId)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting/creating song: %v\n", err)
 		return err
 	}
 
 	_, err = db.Pool.Exec(context.Background(),
-		`INSERT INTO history (user_id, timestamp, song_name, artist, album_name, ms_played, platform, artist_id, song_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`INSERT INTO history (user_id, timestamp, song_name, artist, album_name, ms_played, platform, artist_id, song_id, artist_ids)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (user_id, song_name, artist, timestamp) DO NOTHING`,
 		scrobble.UserId, scrobble.Timestamp, scrobble.SongName, scrobble.Artist,
-		scrobble.Album, scrobble.MsPlayed, scrobble.Platform, artistId, songId)
+		scrobble.Album, scrobble.MsPlayed, scrobble.Platform, primaryArtistId, songId, artistIds)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error saving scrobble: %v\n", err)
 		return err
 	}
 	return nil
+}
+
+func parseArtistString(artist string) []string {
+	if artist == "" {
+		return nil
+	}
+	var artists []string
+	for _, a := range strings.Split(artist, ",") {
+		a = strings.TrimSpace(a)
+		if a != "" {
+			artists = append(artists, a)
+		}
+	}
+	return artists
+}
+
+func getOrCreateArtists(userId int, artistNames []string) ([]int, error) {
+	var artistIds []int
+	for _, name := range artistNames {
+		id, _, err := db.GetOrCreateArtist(userId, name)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting/creating artist: %v\n", err)
+			return nil, err
+		}
+		artistIds = append(artistIds, id)
+	}
+	return artistIds, nil
 }
 
 func SaveScrobbles(scrobbles []Scrobble) (int, int, error) {

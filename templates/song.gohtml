@@ -7,8 +7,10 @@
         <button class="edit-btn" onclick="openEditModal()">Edit</button>
         {{end}}
       </h1>
-      {{if .Artist.Name}}
-      <h2><a href="/profile/{{.Username}}/artist/{{urlquery .Artist.Name}}">{{.Artist.Name}}</a></h2>
+      {{if .ArtistNames}}
+      <h2>
+        {{- range $i, $name := .ArtistNames}}{{if $i}}, {{end}}<a href="/profile/{{$.Username}}/artist/{{urlquery $name}}">{{$name}}</a>{{end}}
+      </h2>
       {{end}}
       {{range .Albums}}
       <h3><a href="/profile/{{$.Username}}/album/{{urlquery $.Artist.Name}}/{{urlquery .Title}}">{{.Title}}</a></h3>
@@ -32,7 +34,10 @@
       {{$username := .Username}}
       {{range .Times}}
       <tr>
-        <td><a href="/profile/{{$username}}/artist/{{urlquery .ArtistName}}">{{.ArtistName}}</a></td>
+        <td>
+          {{- $artistNames := getArtistNames .ArtistIds}}
+          {{- range $i, $name := $artistNames}}{{if $i}}, {{end}}<a href="/profile/{{$username}}/artist/{{urlquery $name}}">{{$name}}</a>{{end}}
+        </td>
         <td><a href="/profile/{{$username}}/song/{{urlquery .ArtistName}}/{{urlquery .SongName}}">{{.SongName}}</a></td>
         <td><a href="/profile/{{$username}}/album/{{urlquery .ArtistName}}/{{urlquery .AlbumName}}">{{.AlbumName}}</a></td>
         <td title="{{formatTimestampFull .Timestamp}}">{{formatTimestamp .Timestamp}}</td>

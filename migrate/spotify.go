@@ -43,6 +43,7 @@ type trackSource struct {
 	tracksToSkip map[string]struct{} // Set of duplicate keys to skip
 	idx          int                 // Current position in tracks slice
 	userId       int                 // User ID to associate with imported tracks
+	artistIdMap  map[string][]int    // Map of track key to artist IDs
 }
 
 // Represents a track already stored in the database, used for duplicate
@@ -107,11 +108,19 @@ func ImportSpotify(tracks []SpotifyTrack,
 			continue
 		}
 
+		artistIdMap, err := resolveArtistIds(userId, validTracks)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error resolving artist IDs: %v\n", err)
+			batchStart += batchSize
+			continue
+		}
+
 		src := &trackSource{
 			tracks:       validTracks,
 			tracksToSkip: tracksToSkip,
 			idx:          0,
 			userId:       userId,
+			artistIdMap:  artistIdMap,
 		}
 
 		copyCount, err := db.Pool.CopyFrom(
@@ -125,6 +134,8 @@ func ImportSpotify(tracks []SpotifyTrack,
 				"album_name",
 				"ms_played",
 				"platform",
+				"artist_id",
+				"artist_ids",
 			},
 			src,
 		)
@@ -216,6 +227,43 @@ func getDupes(userId int, tracks []SpotifyTrack) (map[string]struct{}, error) {
 	}
 
 	return duplicates, nil
+}
+
+func resolveArtistIds(userId int, tracks []SpotifyTrack) (map[string][]int, error) {
+	artistIdMap := make(map[string][]int)
+
+	for _, track := range tracks {
+		trackKey := createTrackKey(track)
+		artistNames := parseArtistString(track.Artist)
+
+		var artistIds []int
+		for _, name := range artistNames {
+			artistId, _, err := db.GetOrCreateArtist(userId, name)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error creating artist %s: %v\n", name, err)
+				continue
+			}
+			artistIds = append(artistIds, artistId)
+		}
+
+		artistIdMap[trackKey] = artistIds
+	}
+
+	return artistIdMap, nil
+}
+
+func parseArtistString(artist string) []string {
+	if artist == "" {
+		return nil
+	}
+	var artists []string
+	for _, a := range strings.Split(artist, ",") {
+		a = strings.TrimSpace(a)
+		if a != "" {
+			artists = append(artists, a)
+		}
+	}
+	return artists
 }
 
 // Get the min/max timestamp range for a batch of tracks
@@ -319,6 +367,14 @@ func (s *trackSource) Next() bool {
 func (s *trackSource) Values() ([]any, error) {
 	// idx is already incremented in Next(), so use idx-1
 	t := s.tracks[s.idx-1]
+	trackKey := createTrackKey(t)
+	artistIds := s.artistIdMap[trackKey]
+
+	primaryArtistId := 0
+	if len(artistIds) > 0 {
+		primaryArtistId = artistIds[0]
+	}
+
 	return []any{
 		s.userId,
 		t.Timestamp,
@@ -327,6 +383,8 @@ func (s *trackSource) Values() ([]any, error) {
 		t.Album,
 		t.Played,
 		"spotify",
+		primaryArtistId,
+		artistIds,
 	}, nil
 }
 

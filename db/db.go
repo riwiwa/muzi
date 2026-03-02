@@ -250,8 +250,10 @@ func AddHistoryEntityColumns() error {
 	_, err := Pool.Exec(context.Background(),
 		`ALTER TABLE history ADD COLUMN IF NOT EXISTS artist_id INTEGER REFERENCES artists(id) ON DELETE SET NULL;
 		ALTER TABLE history ADD COLUMN IF NOT EXISTS song_id INTEGER REFERENCES songs(id) ON DELETE SET NULL;
+		ALTER TABLE history ADD COLUMN IF NOT EXISTS artist_ids INTEGER[] DEFAULT '{}';
 		CREATE INDEX IF NOT EXISTS idx_history_artist_id ON history(artist_id);
-		CREATE INDEX IF NOT EXISTS idx_history_song_id ON history(song_id);`)
+		CREATE INDEX IF NOT EXISTS idx_history_song_id ON history(song_id);
+		CREATE INDEX IF NOT EXISTS idx_history_artist_ids ON history USING gin(artist_ids);`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error adding history entity columns: %v\n", err)
 		return err

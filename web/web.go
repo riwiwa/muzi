@@ -37,6 +37,7 @@ func init() {
 		"formatTimestamp":     formatTimestamp,
 		"formatTimestampFull": formatTimestampFull,
 		"urlquery":            url.QueryEscape,
+		"getArtistNames":      GetArtistNames,
 	}
 	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("./templates/*.gohtml"))
 }

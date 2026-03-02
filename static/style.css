@@ -334,6 +334,7 @@
     justify-content: center;
     margin: 5px;
     width: 30%;
+    white-space: pre-wrap;
   }
   tr:nth-child(even) {
     background-color: #111;
@@ -341,6 +342,7 @@
   a {
     color: #AFA;
     text-decoration: none;
+    white-space: pre-wrap;
   }
   a:hover {
     color: #FFF;
