@@ -510,6 +510,19 @@ type TopArtist struct {
 	ListenCount int
 }
 
+type TopAlbum struct {
+	AlbumName   string
+	Artist      string
+	CoverUrl    string
+	ListenCount int
+}
+
+type TopTrack struct {
+	SongName    string
+	Artist      string
+	ListenCount int
+}
+
 func GetTopArtists(userId int, limit int, startDate, endDate *time.Time) ([]TopArtist, error) {
 	var err error
 	var rows pgx.Rows
@@ -577,6 +590,130 @@ func GetTopArtists(userId int, limit int, startDate, endDate *time.Time) ([]TopA
 		topArtists = append(topArtists, TopArtist{Artist: a, ListenCount: count})
 	}
 	return topArtists, nil
+}
+
+func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAlbum, error) {
+	var err error
+	var rows pgx.Rows
+
+	if startDate == nil && endDate == nil {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
+			FROM history h
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			WHERE h.user_id = $1 AND h.album_name IS NOT NULL AND h.album_name != ''
+			GROUP BY h.album_name, h.artist, a.cover_url
+			ORDER BY listen_count DESC
+			LIMIT $2`,
+			userId, limit)
+	} else if startDate != nil && endDate == nil {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
+			FROM history h
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			WHERE h.user_id = $1 AND h.timestamp >= $2 AND h.album_name IS NOT NULL AND h.album_name != ''
+			GROUP BY h.album_name, h.artist, a.cover_url
+			ORDER BY listen_count DESC
+			LIMIT $3`,
+			userId, startDate, limit)
+	} else if startDate == nil && endDate != nil {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
+			FROM history h
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			WHERE h.user_id = $1 AND h.timestamp <= $2 AND h.album_name IS NOT NULL AND h.album_name != ''
+			GROUP BY h.album_name, h.artist, a.cover_url
+			ORDER BY listen_count DESC
+			LIMIT $3`,
+			userId, endDate, limit)
+	} else {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
+			FROM history h
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			WHERE h.user_id = $1 AND h.timestamp >= $2 AND h.timestamp <= $3 AND h.album_name IS NOT NULL AND h.album_name != ''
+			GROUP BY h.album_name, h.artist, a.cover_url
+			ORDER BY listen_count DESC
+			LIMIT $4`,
+			userId, startDate, endDate, limit)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var topAlbums []TopAlbum
+	for rows.Next() {
+		var albumName, artist, coverUrl string
+		var count int
+		err := rows.Scan(&albumName, &artist, &coverUrl, &count)
+		if err != nil {
+			return nil, err
+		}
+		topAlbums = append(topAlbums, TopAlbum{AlbumName: albumName, Artist: artist, CoverUrl: coverUrl, ListenCount: count})
+	}
+	return topAlbums, nil
+}
+
+func GetTopTracks(userId int, limit int, startDate, endDate *time.Time) ([]TopTrack, error) {
+	var err error
+	var rows pgx.Rows
+
+	if startDate == nil && endDate == nil {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT song_name, artist, COUNT(*) as listen_count
+			FROM history
+			WHERE user_id = $1
+			GROUP BY song_name, artist
+			ORDER BY listen_count DESC
+			LIMIT $2`,
+			userId, limit)
+	} else if startDate != nil && endDate == nil {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT song_name, artist, COUNT(*) as listen_count
+			FROM history
+			WHERE user_id = $1 AND timestamp >= $2
+			GROUP BY song_name, artist
+			ORDER BY listen_count DESC
+			LIMIT $3`,
+			userId, startDate, limit)
+	} else if startDate == nil && endDate != nil {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT song_name, artist, COUNT(*) as listen_count
+			FROM history
+			WHERE user_id = $1 AND timestamp <= $2
+			GROUP BY song_name, artist
+			ORDER BY listen_count DESC
+			LIMIT $3`,
+			userId, endDate, limit)
+	} else {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT song_name, artist, COUNT(*) as listen_count
+			FROM history
+			WHERE user_id = $1 AND timestamp >= $2 AND timestamp <= $3
+			GROUP BY song_name, artist
+			ORDER BY listen_count DESC
+			LIMIT $4`,
+			userId, startDate, endDate, limit)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var topTracks []TopTrack
+	for rows.Next() {
+		var songName, artist string
+		var count int
+		err := rows.Scan(&songName, &artist, &count)
+		if err != nil {
+			return nil, err
+		}
+		topTracks = append(topTracks, TopTrack{SongName: songName, Artist: artist, ListenCount: count})
+	}
+	return topTracks, nil
 }
 
 func GetSongStats(userId, songId int) (int, error) {

@@ -157,6 +157,204 @@
     </div>
     {{end}}
   </div>
+  <div class="top-albums">
+    <div class="top-albums-controls">
+      <h3>Top Albums</h3>
+      <div class="controls-row">
+        <label>
+          Period:
+          <select id="album-period-select" onchange="updateTopAlbums()">
+            <option value="all_time" {{if eq .TopAlbumsPeriod "all_time"}}selected{{end}}>All Time</option>
+            <option value="week" {{if eq .TopAlbumsPeriod "week"}}selected{{end}}>Last 7 Days</option>
+            <option value="month" {{if eq .TopAlbumsPeriod "month"}}selected{{end}}>Last 30 Days</option>
+            <option value="year" {{if eq .TopAlbumsPeriod "year"}}selected{{end}}>Last Year</option>
+            <option value="custom" {{if eq .TopAlbumsPeriod "custom"}}selected{{end}}>Custom</option>
+          </select>
+        </label>
+        <div id="album-custom-dates" style="display: {{if eq .TopAlbumsPeriod "custom"}}inline-block{{else}}none{{end}};">
+          <input type="date" id="album-start-date" onchange="updateTopAlbums()">
+          <input type="date" id="album-end-date" onchange="updateTopAlbums()">
+        </div>
+        <label>
+          Count:
+          <select id="album-limit-select" onchange="updateTopAlbums()">
+            <option value="5" {{if eq .TopAlbumsLimit 5}}selected{{end}}>5</option>
+            <option value="6" {{if eq .TopAlbumsLimit 6}}selected{{end}}>6</option>
+            <option value="7" {{if eq .TopAlbumsLimit 7}}selected{{end}}>7</option>
+            <option value="8" {{if eq .TopAlbumsLimit 8}}selected{{end}}>8</option>
+            <option value="9" {{if eq .TopAlbumsLimit 9}}selected{{end}}>9</option>
+            <option value="10" {{if eq .TopAlbumsLimit 10}}selected{{end}}>10</option>
+            <option value="15" {{if eq .TopAlbumsLimit 15}}selected{{end}}>15</option>
+            <option value="20" {{if eq .TopAlbumsLimit 20}}selected{{end}}>20</option>
+            <option value="25" {{if eq .TopAlbumsLimit 25}}selected{{end}}>25</option>
+            <option value="30" {{if eq .TopAlbumsLimit 30}}selected{{end}}>30</option>
+          </select>
+        </label>
+        <label>
+          View:
+          <select id="album-view-select" onchange="updateTopAlbumsLimitOptions(); updateTopAlbums()">
+            <option value="grid" {{if eq .TopAlbumsView "grid"}}selected{{end}}>Grid</option>
+            <option value="list" {{if eq .TopAlbumsView "list"}}selected{{end}}>List</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    {{if .TopAlbums}}
+    <div id="top-albums-display" class="top-albums-{{.TopAlbumsView}}">
+      {{$view := .TopAlbumsView}}
+      {{$albums := .TopAlbums}}
+      {{$len := len $albums}}
+      {{if eq $view "grid"}}
+      <div class="artist-grid {{if mod $len 2}}artist-grid-odd{{end}}">
+        {{if mod $len 2}}
+        <div class="artist-cell-first">
+          <a href="/profile/{{$.Username}}/album/{{urlquery (index $albums 0).Artist}}/{{urlquery (index $albums 0).AlbumName}}" class="grid-items-cover-image">
+              <div class="grid-items-cover-image-image">
+                {{if (index $albums 0).CoverUrl}}
+                <img src="{{(index $albums 0).CoverUrl}}" alt="{{(index $albums 0).AlbumName}}">
+                {{else}}
+                <div class="artist-placeholder"></div>
+                {{end}}
+              </div>
+            <div class="grid-items-item-details">
+              <p class="grid-items-item-main-text">{{(index $albums 0).AlbumName}}</p>
+              <p class="grid-items-item-aux-text">{{(index $albums 0).Artist}}</p>
+              <p class="grid-items-item-aux-text">{{formatInt (index $albums 0).ListenCount}} plays</p>
+            </div>
+          </a>
+        </div>
+        <div class="artist-right-col">
+          <div class="artist-row">
+            {{range $i, $a := sliceAlbum $albums 1 (add 1 (div (sub $len 1) 2))}}
+            <div class="artist-cell">
+              <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="grid-items-cover-image">
+                <div class="grid-items-cover-image-image">
+                  {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder"></div>{{end}}
+                </div>
+                <div class="grid-items-item-details">
+                  <p class="grid-items-item-main-text">{{$a.AlbumName}}</p>
+                  <p class="grid-items-item-aux-text">{{$a.Artist}}</p>
+                  <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
+                </div>
+              </a>
+            </div>
+            {{end}}
+          </div>
+          <div class="artist-row">
+            {{range $i, $a := sliceAlbum $albums (add 1 (div (sub $len 1) 2)) $len}}
+            <div class="artist-cell">
+              <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="grid-items-cover-image">
+                <div class="grid-items-cover-image-image">
+                  {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder"></div>{{end}}
+                </div>
+                <div class="grid-items-item-details">
+                  <p class="grid-items-item-main-text">{{$a.AlbumName}}</p>
+                  <p class="grid-items-item-aux-text">{{$a.Artist}}</p>
+                  <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
+                </div>
+              </a>
+            </div>
+            {{end}}
+          </div>
+        </div>
+        {{else}}
+        <div class="artist-row">
+          {{range $i, $a := sliceAlbum $albums 0 (div $len 2)}}
+          <div class="artist-cell">
+            <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="grid-items-cover-image">
+              <div class="grid-items-cover-image-image">
+                {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder"></div>{{end}}
+              </div>
+              <div class="grid-items-item-details">
+                <p class="grid-items-item-main-text">{{$a.AlbumName}}</p>
+                <p class="grid-items-item-aux-text">{{$a.Artist}}</p>
+                <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
+              </div>
+            </a>
+          </div>
+          {{end}}
+        </div>
+        <div class="artist-row">
+          {{range $i, $a := sliceAlbum $albums (div $len 2) $len}}
+          <div class="artist-cell">
+            <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="grid-items-cover-image">
+              <div class="grid-items-cover-image-image">
+                {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder"></div>{{end}}
+              </div>
+              <div class="grid-items-item-details">
+                <p class="grid-items-item-main-text">{{$a.AlbumName}}</p>
+                <p class="grid-items-item-aux-text">{{$a.Artist}}</p>
+                <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
+              </div>
+            </a>
+          </div>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="artist-list">
+        {{range $a := $albums}}
+        <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="artist-row">
+          {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder-row"></div>{{end}}
+          <span class="artist-name">{{$a.AlbumName}} - {{$a.Artist}}</span>
+          <span class="artist-count">{{formatInt $a.ListenCount}} plays</span>
+        </a>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  <div class="top-tracks">
+    <div class="top-tracks-controls">
+      <h3>Top Tracks</h3>
+      <div class="controls-row">
+        <label>
+          Period:
+          <select id="track-period-select" onchange="updateTopTracks()">
+            <option value="all_time" {{if eq .TopTracksPeriod "all_time"}}selected{{end}}>All Time</option>
+            <option value="week" {{if eq .TopTracksPeriod "week"}}selected{{end}}>Last 7 Days</option>
+            <option value="month" {{if eq .TopTracksPeriod "month"}}selected{{end}}>Last 30 Days</option>
+            <option value="year" {{if eq .TopTracksPeriod "year"}}selected{{end}}>Last Year</option>
+            <option value="custom" {{if eq .TopTracksPeriod "custom"}}selected{{end}}>Custom</option>
+          </select>
+        </label>
+        <div id="track-custom-dates" style="display: {{if eq .TopTracksPeriod "custom"}}inline-block{{else}}none{{end}};">
+          <input type="date" id="track-start-date" onchange="updateTopTracks()">
+          <input type="date" id="track-end-date" onchange="updateTopTracks()">
+        </div>
+        <label>
+          Count:
+          <select id="track-limit-select" onchange="updateTopTracks()">
+            <option value="5" {{if eq .TopTracksLimit 5}}selected{{end}}>5</option>
+            <option value="6" {{if eq .TopTracksLimit 6}}selected{{end}}>6</option>
+            <option value="7" {{if eq .TopTracksLimit 7}}selected{{end}}>7</option>
+            <option value="8" {{if eq .TopTracksLimit 8}}selected{{end}}>8</option>
+            <option value="9" {{if eq .TopTracksLimit 9}}selected{{end}}>9</option>
+            <option value="10" {{if eq .TopTracksLimit 10}}selected{{end}}>10</option>
+            <option value="15" {{if eq .TopTracksLimit 15}}selected{{end}}>15</option>
+            <option value="20" {{if eq .TopTracksLimit 20}}selected{{end}}>20</option>
+            <option value="25" {{if eq .TopTracksLimit 25}}selected{{end}}>25</option>
+            <option value="30" {{if eq .TopTracksLimit 30}}selected{{end}}>30</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    {{if .TopTracks}}
+    <div id="top-tracks-display">
+      {{$tracks := .TopTracks}}
+      <div class="artist-list">
+        {{range $t := $tracks}}
+        <a href="/profile/{{$.Username}}/song/{{urlquery $t.Artist}}/{{urlquery $t.SongName}}" class="artist-row">
+          <span class="artist-name">{{$t.SongName}} - {{$t.Artist}}</span>
+          <span class="artist-count">{{formatInt $t.ListenCount}} plays</span>
+        </a>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
   <div class="history">
     <h3>Listening History</h3>
     <table>

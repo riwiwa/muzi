@@ -36,6 +36,8 @@ func init() {
 		"div":                 div,
 		"mod":                 mod,
 		"slice":               slice,
+		"sliceAlbum":          sliceAlbum,
+		"sliceTrack":          sliceTrack,
 		"gridReorder":         gridReorder,
 		"formatInt":           formatInt,
 		"formatTimestamp":     formatTimestamp,

@@ -770,7 +770,37 @@ a.button:hover {
   border-radius: 10px;
 }
 
+.top-albums {
+  width: 50%;
+  margin: 15px 0;
+  padding: 10px;
+  background: #1a1a1a;
+  border-radius: 10px;
+}
+
+.top-tracks {
+  width: 50%;
+  margin: 15px 0;
+  padding: 10px;
+  background: #1a1a1a;
+  border-radius: 10px;
+}
+
 .top-artists-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.top-albums-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.top-tracks-controls {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -781,9 +811,16 @@ a.button:hover {
   min-height: 150px;
 }
 
+#top-albums-display {
+  min-height: 150px;
+}
+
+#top-tracks-display {
+  min-height: 150px;
+}
+
 .top-artists-controls h3 {
   margin: 0;
-  color: #fff;
 }
 
 .controls-row {

@@ -43,6 +43,26 @@ func slice(a []db.TopArtist, start int, end int) []db.TopArtist {
 	return a[start:end]
 }
 
+func sliceAlbum(a []db.TopAlbum, start int, end int) []db.TopAlbum {
+	if start >= len(a) {
+		return []db.TopAlbum{}
+	}
+	if end > len(a) {
+		end = len(a)
+	}
+	return a[start:end]
+}
+
+func sliceTrack(a []db.TopTrack, start int, end int) []db.TopTrack {
+	if start >= len(a) {
+		return []db.TopTrack{}
+	}
+	if end > len(a) {
+		end = len(a)
+	}
+	return a[start:end]
+}
+
 func gridReorder(artists []db.TopArtist) []db.TopArtist {
 	if len(artists) < 2 {
 		return artists
