@@ -34,6 +34,10 @@ type ProfileData struct {
 	TemplateName        string
 	NowPlayingArtist    string
 	NowPlayingTitle     string
+	TopArtists          []db.TopArtist
+	TopArtistsPeriod    string
+	TopArtistsLimit     int
+	TopArtistsView      string
 }
 
 // Render a page of the profile in the URL
@@ -83,6 +87,72 @@ func profilePageHandler() http.HandlerFunc {
 			fmt.Fprintf(os.Stderr, "Cannot get profile for %s: %v\n", username, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		period := r.URL.Query().Get("period")
+		if period == "" {
+			period = "all_time"
+		}
+
+		view := r.URL.Query().Get("view")
+		if view == "" {
+			view = "grid"
+		}
+
+		maxLimit := 30
+		if view == "grid" {
+			maxLimit = 8
+		}
+
+		limitStr := r.URL.Query().Get("limit")
+		limit := 10
+		if limitStr != "" {
+			limit, err = strconv.Atoi(limitStr)
+			if err != nil || limit < 5 {
+				limit = 10
+			}
+			if limit > maxLimit {
+				limit = maxLimit
+			}
+		}
+
+		profileData.TopArtistsPeriod = period
+		profileData.TopArtistsLimit = limit
+		profileData.TopArtistsView = view
+
+		var startDate, endDate *time.Time
+		now := time.Now()
+		switch period {
+		case "week":
+			start := now.AddDate(0, 0, -7)
+			startDate = &start
+		case "month":
+			start := now.AddDate(0, -1, 0)
+			startDate = &start
+		case "year":
+			start := now.AddDate(-1, 0, 0)
+			startDate = &start
+		case "custom":
+			startStr := r.URL.Query().Get("start")
+			endStr := r.URL.Query().Get("end")
+			if startStr != "" {
+				if t, err := time.Parse("2006-01-02", startStr); err == nil {
+					startDate = &t
+				}
+			}
+			if endStr != "" {
+				if t, err := time.Parse("2006-01-02", endStr); err == nil {
+					t = t.AddDate(0, 0, 1)
+					endDate = &t
+				}
+			}
+		}
+
+		topArtists, err := db.GetTopArtists(userId, limit, startDate, endDate)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot get top artists: %v\n", err)
+		} else {
+			profileData.TopArtists = topArtists
 		}
 
 		if pageInt == 1 {

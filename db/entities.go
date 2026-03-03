@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5"
 )
 
 type Artist struct {
@@ -502,6 +503,80 @@ func GetArtistStats(userId, artistId int) (int, error) {
 		"SELECT COUNT(*) FROM history WHERE user_id = $1 AND $2 = ANY(artist_ids)",
 		userId, artistId).Scan(&count)
 	return count, err
+}
+
+type TopArtist struct {
+	Artist      Artist
+	ListenCount int
+}
+
+func GetTopArtists(userId int, limit int, startDate, endDate *time.Time) ([]TopArtist, error) {
+	var err error
+	var rows pgx.Rows
+
+	if startDate == nil && endDate == nil {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT a.id, a.user_id, a.name, a.image_url, a.bio, a.spotify_id, a.musicbrainz_id, COUNT(*) as listen_count
+			FROM artists a
+			JOIN history h ON h.user_id = a.user_id AND a.id = ANY(h.artist_ids)
+			WHERE h.user_id = $1
+			GROUP BY a.id
+			ORDER BY listen_count DESC
+			LIMIT $2`,
+			userId, limit)
+	} else if startDate != nil && endDate == nil {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT a.id, a.user_id, a.name, a.image_url, a.bio, a.spotify_id, a.musicbrainz_id, COUNT(*) as listen_count
+			FROM artists a
+			JOIN history h ON h.user_id = a.user_id AND a.id = ANY(h.artist_ids)
+			WHERE h.user_id = $1 AND h.timestamp >= $2
+			GROUP BY a.id
+			ORDER BY listen_count DESC
+			LIMIT $3`,
+			userId, startDate, limit)
+	} else if startDate == nil && endDate != nil {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT a.id, a.user_id, a.name, a.image_url, a.bio, a.spotify_id, a.musicbrainz_id, COUNT(*) as listen_count
+			FROM artists a
+			JOIN history h ON h.user_id = a.user_id AND a.id = ANY(h.artist_ids)
+			WHERE h.user_id = $1 AND h.timestamp <= $2
+			GROUP BY a.id
+			ORDER BY listen_count DESC
+			LIMIT $3`,
+			userId, endDate, limit)
+	} else {
+		rows, err = Pool.Query(context.Background(),
+			`SELECT a.id, a.user_id, a.name, a.image_url, a.bio, a.spotify_id, a.musicbrainz_id, COUNT(*) as listen_count
+			FROM artists a
+			JOIN history h ON h.user_id = a.user_id AND a.id = ANY(h.artist_ids)
+			WHERE h.user_id = $1 AND h.timestamp >= $2 AND h.timestamp <= $3
+			GROUP BY a.id
+			ORDER BY listen_count DESC
+			LIMIT $4`,
+			userId, startDate, endDate, limit)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var topArtists []TopArtist
+	for rows.Next() {
+		var a Artist
+		var count int
+		var imageUrlPg, bioPg, spotifyIdPg, musicbrainzIdPg pgtype.Text
+		err := rows.Scan(&a.Id, &a.UserId, &a.Name, &imageUrlPg, &bioPg, &spotifyIdPg, &musicbrainzIdPg, &count)
+		if err != nil {
+			return nil, err
+		}
+		a.ImageUrl = imageUrlPg.String
+		a.Bio = bioPg.String
+		a.SpotifyId = spotifyIdPg.String
+		a.MusicbrainzId = musicbrainzIdPg.String
+		topArtists = append(topArtists, TopArtist{Artist: a, ListenCount: count})
+	}
+	return topArtists, nil
 }
 
 func GetSongStats(userId, songId int) (int, error) {

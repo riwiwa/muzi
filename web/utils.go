@@ -19,6 +19,49 @@ func add(a int, b int) int {
 	return a + b
 }
 
+// Divides two integers (integer division)
+func div(a int, b int) int {
+	if b == 0 {
+		return 0
+	}
+	return a / b
+}
+
+// Returns a % b
+func mod(a int, b int) int {
+	return a % b
+}
+
+// Returns a slice of a slice from start to end
+func slice(a []db.TopArtist, start int, end int) []db.TopArtist {
+	if start >= len(a) {
+		return []db.TopArtist{}
+	}
+	if end > len(a) {
+		end = len(a)
+	}
+	return a[start:end]
+}
+
+func gridReorder(artists []db.TopArtist) []db.TopArtist {
+	if len(artists) < 2 {
+		return artists
+	}
+	if len(artists)%2 == 0 {
+		return artists
+	}
+	remaining := len(artists) - 1
+	perRow := remaining / 2
+	rest := artists[1:]
+	firstRow := rest[:perRow]
+	secondRow := rest[perRow:]
+	var reordered []db.TopArtist
+	reordered = append(reordered, artists[0])
+	reordered = append(reordered, secondRow...)
+	reordered = append(reordered, firstRow...)
+	return reordered
+}
+
 // Put a comma in the thousands place, ten-thousands place etc.
 func formatInt(n int) string {
 	if n < 1000 {

@@ -33,6 +33,10 @@ func init() {
 	funcMap := template.FuncMap{
 		"sub":                 sub,
 		"add":                 add,
+		"div":                 div,
+		"mod":                 mod,
+		"slice":               slice,
+		"gridReorder":         gridReorder,
 		"formatInt":           formatInt,
 		"formatTimestamp":     formatTimestamp,
 		"formatTimestampFull": formatTimestampFull,

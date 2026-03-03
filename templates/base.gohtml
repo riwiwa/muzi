@@ -55,6 +55,9 @@
       {{ if eq .TemplateName "album"}}{{block "album" .}}{{end}}{{end}}
   
       <script src="/files/menu.js"></script>
+      {{if eq .TemplateName "profile"}}
+      <script src="/files/profile.js"></script>
+      {{end}}
     </body>
   </html>
 {{end}}

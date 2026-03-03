@@ -13,6 +13,150 @@
         <h3>{{formatInt .ArtistCount}}</h3> <p>Artists<p>
       </div>
   </div>
+  <div class="top-artists">
+    <div class="top-artists-controls">
+      <h3>Top Artists</h3>
+      <div class="controls-row">
+        <label>
+          Period:
+          <select id="period-select" onchange="updateTopArtists()">
+            <option value="all_time" {{if eq .TopArtistsPeriod "all_time"}}selected{{end}}>All Time</option>
+            <option value="week" {{if eq .TopArtistsPeriod "week"}}selected{{end}}>Last 7 Days</option>
+            <option value="month" {{if eq .TopArtistsPeriod "month"}}selected{{end}}>Last 30 Days</option>
+            <option value="year" {{if eq .TopArtistsPeriod "year"}}selected{{end}}>Last Year</option>
+            <option value="custom" {{if eq .TopArtistsPeriod "custom"}}selected{{end}}>Custom</option>
+          </select>
+        </label>
+        <div id="custom-dates" style="display: {{if eq .TopArtistsPeriod "custom"}}inline-block{{else}}none{{end}};">
+          <input type="date" id="start-date" onchange="updateTopArtists()">
+          <input type="date" id="end-date" onchange="updateTopArtists()">
+        </div>
+        <label>
+          Count:
+          <select id="limit-select" onchange="updateTopArtists()">
+            <option value="5" {{if eq .TopArtistsLimit 5}}selected{{end}}>5</option>
+            <option value="6" {{if eq .TopArtistsLimit 6}}selected{{end}}>6</option>
+            <option value="7" {{if eq .TopArtistsLimit 7}}selected{{end}}>7</option>
+            <option value="8" {{if eq .TopArtistsLimit 8}}selected{{end}}>8</option>
+            <option value="9" {{if eq .TopArtistsLimit 9}}selected{{end}}>9</option>
+            <option value="10" {{if eq .TopArtistsLimit 10}}selected{{end}}>10</option>
+            <option value="15" {{if eq .TopArtistsLimit 15}}selected{{end}}>15</option>
+            <option value="20" {{if eq .TopArtistsLimit 20}}selected{{end}}>20</option>
+            <option value="25" {{if eq .TopArtistsLimit 25}}selected{{end}}>25</option>
+            <option value="30" {{if eq .TopArtistsLimit 30}}selected{{end}}>30</option>
+          </select>
+        </label>
+        <label>
+          View:
+          <select id="view-select" onchange="updateLimitOptions(); updateTopArtists()">
+            <option value="grid" {{if eq .TopArtistsView "grid"}}selected{{end}}>Grid</option>
+            <option value="list" {{if eq .TopArtistsView "list"}}selected{{end}}>List</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    {{if .TopArtists}}
+    <div id="top-artists-display" class="top-artists-{{.TopArtistsView}}">
+      {{$view := .TopArtistsView}}
+      {{$artists := .TopArtists}}
+      {{$len := len $artists}}
+      {{if eq $view "grid"}}
+      <div class="artist-grid {{if mod $len 2}}artist-grid-odd{{end}}">
+        {{if mod $len 2}}
+        <div class="artist-cell-first">
+          <a href="/profile/{{$.Username}}/artist/{{urlquery (index $artists 0).Artist.Name}}" class="grid-items-cover-image">
+              <div class="grid-items-cover-image-image">
+                {{if (index $artists 0).Artist.ImageUrl}}
+                <img src="{{(index $artists 0).Artist.ImageUrl}}" alt="{{(index $artists 0).Artist.Name}}">
+                {{else}}
+                <div class="artist-placeholder"></div>
+                {{end}}
+              </div>
+            <div class="grid-items-item-details">
+              <p class="grid-items-item-main-text">{{(index $artists 0).Artist.Name}}</p>
+              <p class="grid-items-item-aux-text">{{formatInt (index $artists 0).ListenCount}} plays</p>
+            </div>
+          </a>
+        </div>
+        <div class="artist-right-col">
+          <div class="artist-row">
+            {{range $i, $a := slice $artists 1 (add 1 (div (sub $len 1) 2))}}
+            <div class="artist-cell">
+              <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="grid-items-cover-image">
+                <div class="grid-items-cover-image-image">
+                  {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder"></div>{{end}}
+                </div>
+                <div class="grid-items-item-details">
+                  <p class="grid-items-item-main-text">{{$a.Artist.Name}}</p>
+                  <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
+                </div>
+              </a>
+            </div>
+            {{end}}
+          </div>
+          <div class="artist-row">
+            {{range $i, $a := slice $artists (add 1 (div (sub $len 1) 2)) $len}}
+            <div class="artist-cell">
+              <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="grid-items-cover-image">
+                <div class="grid-items-cover-image-image">
+                  {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder"></div>{{end}}
+                </div>
+                <div class="grid-items-item-details">
+                  <p class="grid-items-item-main-text">{{$a.Artist.Name}}</p>
+                  <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
+                </div>
+              </a>
+            </div>
+            {{end}}
+          </div>
+        </div>
+        {{else}}
+        <div class="artist-row">
+          {{range $i, $a := slice $artists 0 (div $len 2)}}
+          <div class="artist-cell">
+            <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="grid-items-cover-image">
+              <div class="grid-items-cover-image-image">
+                {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder"></div>{{end}}
+              </div>
+              <div class="grid-items-item-details">
+                <p class="grid-items-item-main-text">{{$a.Artist.Name}}</p>
+                <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
+              </div>
+            </a>
+          </div>
+          {{end}}
+        </div>
+        <div class="artist-row">
+          {{range $i, $a := slice $artists (div $len 2) $len}}
+          <div class="artist-cell">
+            <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="grid-items-cover-image">
+              <div class="grid-items-cover-image-image">
+                {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder"></div>{{end}}
+              </div>
+              <div class="grid-items-item-details">
+                <p class="grid-items-item-main-text">{{$a.Artist.Name}}</p>
+                <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
+              </div>
+            </a>
+          </div>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="artist-list">
+        {{range $a := $artists}}
+        <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="artist-row">
+          {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder-row"></div>{{end}}
+          <span class="artist-name">{{$a.Artist.Name}}</span>
+          <span class="artist-count">{{formatInt $a.ListenCount}} plays</span>
+        </a>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
   <div class="history">
     <h3>Listening History</h3>
     <table>
@@ -39,7 +183,7 @@
           {{- range $i, $name := $artistNames}}{{if $i}}, {{end}}<a href="/profile/{{$username}}/artist/{{urlquery $name}}">{{$name}}</a>{{end}}
         </td>
         <td><a href="/profile/{{$username}}/song/{{urlquery (index $.Artists $index)}}/{{urlquery $title}}">{{$title}}</a></td>
-        <td title="{{formatTimestampFull (index $times $index)}}">{{formatTimestamp (index $times $index)}}</td>
+        <td><span title="{{formatTimestampFull (index $times $index)}}">{{formatTimestamp (index $times $index)}}</span></td>
       </tr>
       {{end}}
     </table>
