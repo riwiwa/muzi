@@ -451,6 +451,12 @@ func UpdateSong(id int, title string, durationMs int, spotifyId, musicbrainzId s
 	_, err := Pool.Exec(context.Background(),
 		`UPDATE songs SET title = $1, duration_ms = $2, spotify_id = $3, musicbrainz_id = $4 WHERE id = $5`,
 		title, durationMs, spotifyId, musicbrainzId, id)
+	if err != nil {
+		return err
+	}
+	_, err = Pool.Exec(context.Background(),
+		`UPDATE history SET song_name = $1 WHERE song_id = $2`,
+		title, id)
 	return err
 }
 

@@ -169,18 +169,13 @@ document.addEventListener('DOMContentLoaded', function() {
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
           if (xhr.status === 200) {
-            // Update bio display if it exists
-            var bioDisplay = document.getElementById('bio-display');
-            if (bioDisplay && data.bio !== undefined) {
-              bioDisplay.textContent = data.bio;
+            var response = JSON.parse(xhr.responseText);
+            if (response.success && entityType === 'song' && response.artist && response.title && response.username) {
+              var newUrl = '/profile/' + response.username + '/song/' + encodeURIComponent(response.artist) + '/' + encodeURIComponent(response.title);
+              window.location.href = newUrl;
+            } else {
+              location.reload();
             }
-            // Update info display if it exists
-            var infoDisplay = document.getElementById('info-display');
-            if (infoDisplay && data.title !== undefined) {
-              // Will be reloaded anyway, but close modal first
-            }
-            closeEditModal();
-            location.reload();
           } else {
             alert('Error saving: ' + xhr.responseText);
           }

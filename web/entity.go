@@ -735,8 +735,15 @@ func songBatchEditHandler() http.HandlerFunc {
 			return
 		}
 
+		artist, _ := db.GetArtistById(song.ArtistId)
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"success": "true"})
+		json.NewEncoder(w).Encode(map[string]string{
+			"success":  "true",
+			"artist":   artist.Name,
+			"title":    title,
+			"username": username,
+		})
 	}
 }
 
