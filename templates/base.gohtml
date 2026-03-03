@@ -45,6 +45,10 @@
             <img src="/files/assets/icons/settings.svg" class="menu-icon" alt="Settings">
             <span>Settings</span>
           </a>
+          <a href="/scrobble" class="menu-item">
+            <img src="/files/assets/icons/add.svg" class="menu-icon" alt="Scrobble">
+            <span>Manual Scrobble</span>
+          </a>
         </nav>
       </div>
   
@@ -57,6 +61,7 @@
       {{ if eq .TemplateName "artist"}}{{block "artist" .}}{{end}}{{end}}
       {{ if eq .TemplateName "song"}}{{block "song" .}}{{end}}{{end}}
       {{ if eq .TemplateName "album"}}{{block "album" .}}{{end}}{{end}}
+      {{ if eq .TemplateName "scrobble"}}{{block "scrobble" .}}{{end}}{{end}}
   
       <script src="/files/menu.js"></script>
       {{if eq .TemplateName "profile"}}

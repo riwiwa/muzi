@@ -1,0 +1,148 @@
+{{define "scrobble"}}
+  <div class="scrobble-container">
+    <h1>Manual Scrobble</h1>
+    <p>Manually add listening history entries.</p>
+
+    <div id="message" class="message" style="display: none;"></div>
+
+    <form id="scrobble-form">
+      <div id="rows-container">
+        <div class="scrobble-row">
+          <input type="text" name="song_name" placeholder="Song Name" required>
+          <input type="text" name="artist" placeholder="Artist" required>
+          <input type="text" name="album_name" placeholder="Album (optional)">
+          <input type="date" name="date" required>
+          <input type="time" name="time" required step="1">
+          <input type="number" name="duration" placeholder="Duration (sec)" min="0">
+          <button type="button" class="remove-row" style="display: none;">&times;</button>
+        </div>
+      </div>
+
+      <div class="scrobble-actions">
+        <button type="button" id="add-row">+ Add Row</button>
+        <button type="submit">Submit All</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toTimeString().split(' ')[0];
+
+    document.querySelectorAll('.scrobble-row').forEach(row => {
+      row.querySelector('input[name="date"]').value = dateStr;
+      row.querySelector('input[name="time"]').value = timeStr;
+    });
+
+    document.getElementById('add-row').addEventListener('click', () => {
+      const container = document.getElementById('rows-container');
+      const newRow = document.createElement('div');
+      newRow.className = 'scrobble-row';
+      newRow.innerHTML = `
+        <input type="text" name="song_name" placeholder="Song Name" required>
+        <input type="text" name="artist" placeholder="Artist" required>
+        <input type="text" name="album_name" placeholder="Album (optional)">
+        <input type="date" name="date" required value="${dateStr}">
+        <input type="time" name="time" required step="1" value="${timeStr}">
+        <input type="number" name="duration" placeholder="Duration (sec)" min="0">
+        <button type="button" class="remove-row">&times;</button>
+      `;
+      container.appendChild(newRow);
+      updateRemoveButtons();
+    });
+
+    document.getElementById('rows-container').addEventListener('click', (e) => {
+      if (e.target.classList.contains('remove-row')) {
+        e.target.closest('.scrobble-row').remove();
+        updateRemoveButtons();
+      }
+    });
+
+    function updateRemoveButtons() {
+      const rows = document.querySelectorAll('.scrobble-row');
+      const buttons = document.querySelectorAll('.remove-row');
+      buttons.forEach(btn => {
+        btn.style.display = rows.length > 1 ? 'block' : 'none';
+      });
+    }
+
+    document.getElementById('scrobble-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const rows = document.querySelectorAll('.scrobble-row');
+      const tracks = [];
+
+      for (const row of rows) {
+        const songName = row.querySelector('input[name="song_name"]').value.trim();
+        const artist = row.querySelector('input[name="artist"]').value.trim();
+        const albumName = row.querySelector('input[name="album_name"]').value.trim();
+        const date = row.querySelector('input[name="date"]').value;
+        const time = row.querySelector('input[name="time"]').value;
+        const duration = row.querySelector('input[name="duration"]').value;
+
+        if (!songName || !artist || !date || !time) continue;
+
+        const timestamp = new Date(`${date}T${time}`).toISOString();
+        const msPlayed = duration ? parseInt(duration) * 1000 : 0;
+
+        tracks.push({
+          song_name: songName,
+          artist: artist,
+          album_name: albumName,
+          timestamp: timestamp,
+          ms_played: msPlayed
+        });
+      }
+
+      if (tracks.length === 0) {
+        showMessage('Please fill in at least one complete row.', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/scrobble', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tracks })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          showMessage(`Successfully scrobbled ${result.count} track(s)!`, 'success');
+          resetForm();
+        } else {
+          showMessage(result.error || 'Failed to scrobble tracks.', 'error');
+        }
+      } catch (err) {
+        showMessage('An error occurred. Please try again.', 'error');
+      }
+    });
+
+    function showMessage(text, type) {
+      const msg = document.getElementById('message');
+      msg.textContent = text;
+      msg.className = 'message ' + type;
+      msg.style.display = 'block';
+    }
+
+    function resetForm() {
+      const container = document.getElementById('rows-container');
+      container.innerHTML = `
+        <div class="scrobble-row">
+          <input type="text" name="song_name" placeholder="Song Name" required>
+          <input type="text" name="artist" placeholder="Artist" required>
+          <input type="text" name="album_name" placeholder="Album (optional)">
+          <input type="date" name="date" required value="${dateStr}">
+          <input type="time" name="time" required step="1" value="${timeStr}">
+          <input type="number" name="duration" placeholder="Duration (sec)" min="0">
+          <button type="button" class="remove-row" style="display: none;">&times;</button>
+        </div>
+      `;
+      updateRemoveButtons();
+    }
+
+    updateRemoveButtons();
+  </script>
+{{end}}
