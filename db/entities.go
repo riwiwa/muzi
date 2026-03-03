@@ -794,6 +794,7 @@ func GetHistoryForSong(userId, songId int, limit, offset int) ([]ScrobbleEntry, 
 }
 
 type ScrobbleEntry struct {
+	Id         int
 	Timestamp  time.Time
 	SongName   string
 	ArtistName string
@@ -958,7 +959,7 @@ func GetHistoryForSongs(userId int, songIds []int, limit, offset int) ([]Scrobbl
 		return []ScrobbleEntry{}, nil
 	}
 	rows, err := Pool.Query(context.Background(),
-		`SELECT h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
+		`SELECT h.id, h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
 			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name,
 			h.artist_ids
 		FROM history h WHERE h.user_id = $1 AND h.song_id = ANY($2) 
@@ -972,11 +973,25 @@ func GetHistoryForSongs(userId int, songIds []int, limit, offset int) ([]Scrobbl
 	var entries []ScrobbleEntry
 	for rows.Next() {
 		var e ScrobbleEntry
-		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName, &e.ArtistIds)
+		err := rows.Scan(&e.Id, &e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName, &e.ArtistIds)
 		if err != nil {
 			return nil, err
 		}
 		entries = append(entries, e)
 	}
 	return entries, nil
+}
+
+func DeleteHistoryByIds(userId int, ids []int) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := Pool.Exec(context.Background(),
+		`DELETE FROM history WHERE user_id = $1 AND id = ANY($2)`,
+		userId, ids)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error deleting history: %v\n", err)
+		return err
+	}
+	return nil
 }

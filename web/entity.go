@@ -1002,3 +1002,36 @@ func imageUploadHandler() http.HandlerFunc {
 		})
 	}
 }
+
+func deleteScrobbleHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := getLoggedInUsername(r)
+		if username == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		userId, err := getUserIdByUsername(r.Context(), username)
+		if err != nil {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+
+		var ids []int
+		if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
+			fmt.Fprintf(os.Stderr, "Error decoding request: %v\n", err)
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		err = db.DeleteHistoryByIds(userId, ids)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error deleting scrobbles: %v\n", err)
+			http.Error(w, "Error deleting scrobbles", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	}
+}
