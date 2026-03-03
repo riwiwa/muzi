@@ -76,3 +76,19 @@ func getUserIdByUsername(ctx context.Context, username string) (int, error) {
 		Scan(&userId)
 	return userId, err
 }
+
+func logoutHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("session")
+		if err == nil {
+			deleteSession(cookie.Value)
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:   "session",
+			Value:  "",
+			Path:   "/",
+			MaxAge: -1,
+		})
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}
+}

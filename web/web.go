@@ -88,6 +88,7 @@ func Start() {
 	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(http.Dir("./static"))))
 	r.Get("/", rootHandler())
 	r.Get("/login", loginPageHandler())
+	r.Get("/logout", logoutHandler())
 	r.Get("/createaccount", createAccountPageHandler())
 	r.Get("/profile/{username}", profilePageHandler())
 	r.Get("/profile/{username}/artist/{artist}", artistPageHandler())
