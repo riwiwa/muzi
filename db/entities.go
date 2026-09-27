@@ -685,7 +685,7 @@ func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAl
 		rows, err = Pool.Query(context.Background(),
 			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
 			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
 			WHERE h.user_id = $1 AND h.album_name IS NOT NULL AND h.album_name != ''
 			GROUP BY h.album_name, h.artist, a.cover_url
 			ORDER BY listen_count DESC
@@ -695,7 +695,7 @@ func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAl
 		rows, err = Pool.Query(context.Background(),
 			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
 			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
 			WHERE h.user_id = $1 AND h.timestamp >= $2 AND h.album_name IS NOT NULL AND h.album_name != ''
 			GROUP BY h.album_name, h.artist, a.cover_url
 			ORDER BY listen_count DESC
@@ -705,7 +705,7 @@ func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAl
 		rows, err = Pool.Query(context.Background(),
 			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
 			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
 			WHERE h.user_id = $1 AND h.timestamp <= $2 AND h.album_name IS NOT NULL AND h.album_name != ''
 			GROUP BY h.album_name, h.artist, a.cover_url
 			ORDER BY listen_count DESC
@@ -715,7 +715,7 @@ func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAl
 		rows, err = Pool.Query(context.Background(),
 			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
 			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
 			WHERE h.user_id = $1 AND h.timestamp >= $2 AND h.timestamp <= $3 AND h.album_name IS NOT NULL AND h.album_name != ''
 			GROUP BY h.album_name, h.artist, a.cover_url
 			ORDER BY listen_count DESC

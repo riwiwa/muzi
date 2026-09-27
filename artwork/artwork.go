@@ -1,6 +1,6 @@
 // Package artwork fills in missing artist, album and song images from Spotify (when the user has
-// Spotify credentials configured) and Deezer. Images set by users (image_source = 'custom') are never
-// replaced; only rows with no image are looked up.
+// Spotify credentials configured) and Deezer. Spotify images are preferred: Deezer images are replaced
+// once the user adds Spotify credentials. Images set by users (image_source = 'custom') are never replaced.
 package artwork
 
 import (
@@ -9,9 +9,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
+	"sync"
 	"time"
-	"unicode"
 
 	"muzi/config"
 	"muzi/db"
@@ -19,8 +18,11 @@ import (
 
 const batchSize = 25
 
-// Wait between lookups; also keeps well under Deezer's 50 requests / 5 seconds limit
-const requestInterval = 250 * time.Millisecond
+// Minimum gap between requests; keeps under Deezer's 50 requests / 5 seconds limit
+const requestInterval = 125 * time.Millisecond
+
+// Lookups run concurrently so request latency doesn't limit throughput
+const workers = 4
 
 // How long to sleep when there's nothing left to fetch or a provider is failing
 const idleInterval = 5 * time.Minute
@@ -55,34 +57,23 @@ func Start() {
 	}()
 }
 
-// Compares names ignoring case, punctuation and spacing
-func sameName(a, b string) bool {
-	return normalize(a) == normalize(b)
-}
-
-func normalize(s string) string {
-	var sb strings.Builder
-	for _, r := range strings.ToLower(s) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			sb.WriteRune(r)
-		}
-	}
-	// names made only of symbols (e.g. "!!!") would otherwise all match each other
-	if sb.Len() == 0 {
-		return strings.ToLower(strings.TrimSpace(s))
-	}
-	return sb.String()
+type result struct {
+	imageUrl       string
+	source         string
+	spotifyId      string
+	spotifyChecked bool // Spotify answered, whether or not it had an image
 }
 
 // Tries Spotify first, falling back to Deezer. A Deezer error is returned so the row is retried soon
 // rather than recorded as having no image.
-func lookup(
-	spotifyFn func() (string, string, error),
-	deezerFn func() (string, error),
-) (imageUrl, source, spotifyId string, err error) {
-	imageUrl, spotifyId, err = spotifyFn()
+func lookup(spotifyFn func() (string, string, error), deezerFn func() (string, error)) (result, error) {
+	var r result
+	imageUrl, spotifyId, err := spotifyFn()
+	r.spotifyChecked = err == nil
+	r.spotifyId = spotifyId
 	if err == nil && imageUrl != "" {
-		return imageUrl, "spotify", spotifyId, nil
+		r.imageUrl, r.source = imageUrl, "spotify"
+		return r, nil
 	}
 	if err != nil && !errors.Is(err, errNoSpotify) {
 		fmt.Fprintf(os.Stderr, "Spotify image lookup failed, trying Deezer: %v\n", err)
@@ -90,12 +81,60 @@ func lookup(
 
 	imageUrl, err = deezerFn()
 	if err != nil {
-		return "", "", "", err
+		return result{}, err
 	}
 	if imageUrl != "" {
-		return imageUrl, "deezer", spotifyId, nil
+		r.imageUrl, r.source = imageUrl, "deezer"
 	}
-	return "", "", spotifyId, nil
+	return r, nil
+}
+
+// Column names for one kind of entity's image
+type imageColumns struct {
+	table, url, source, fetchedAt, spotifyChecked string
+}
+
+var (
+	artistColumns = imageColumns{"artists", "image_url", "image_source", "image_fetched_at", "image_spotify_checked"}
+	albumColumns  = imageColumns{"albums", "cover_url", "cover_source", "cover_fetched_at", "cover_spotify_checked"}
+	songColumns   = imageColumns{"songs", "image_url", "image_source", "image_fetched_at", "image_spotify_checked"}
+)
+
+// Rows to look up: no image yet (retrying misses after retryAfter), or a non-Spotify image that can be
+// upgraded now that the user has Spotify credentials. Custom and Spotify images are left alone.
+// Expects the entity aliased as e and its user as u.
+func (c imageColumns) pendingCondition() string {
+	return fmt.Sprintf(`e.%[2]s IS DISTINCT FROM 'custom' AND e.%[2]s IS DISTINCT FROM 'spotify' AND (
+			(e.%[1]s IS NULL AND (e.%[3]s IS NULL OR e.%[3]s < now() - %[5]s))
+			OR (NOT e.%[4]s AND NULLIF(u.spotify_client_id, '') IS NOT NULL
+				AND NULLIF(u.spotify_client_secret, '') IS NOT NULL AND e.%[3]s < now() - interval '1 hour')
+		)`, c.url, c.source, c.fetchedAt, c.spotifyChecked, retryAfter)
+}
+
+// Saves a lookup result. An empty result keeps any existing (e.g. Deezer) image rather than clearing it,
+// and a custom image set during the lookup is never overwritten.
+func (c imageColumns) save(id int, r result) error {
+	_, err := db.Pool.Exec(context.Background(),
+		fmt.Sprintf(`UPDATE %[1]s SET
+			%[2]s = COALESCE(NULLIF($2, ''), %[2]s),
+			%[3]s = CASE WHEN $2 <> '' THEN $3 ELSE %[3]s END,
+			%[4]s = now(),
+			%[5]s = %[5]s OR $4,
+			spotify_id = COALESCE(spotify_id, NULLIF($5, ''))
+		WHERE id = $1 AND %[3]s IS DISTINCT FROM 'custom'`,
+			c.table, c.url, c.source, c.fetchedAt, c.spotifyChecked),
+		id, r.imageUrl, r.source, r.spotifyChecked, r.spotifyId)
+	return err
+}
+
+// Records a failed lookup so a row that always errors can't block the rest of the queue.
+// It's backdated so the row is retried in about an hour rather than after the full retryAfter.
+func (c imageColumns) markAttempted(id int) {
+	_, err := db.Pool.Exec(context.Background(),
+		"UPDATE "+c.table+" SET "+c.fetchedAt+" = now() - "+retryAfter+" + interval '1 hour' WHERE id = $1", id)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error recording image lookup: %v\n", err)
+	}
 }
 
 type pending struct {
@@ -106,58 +145,85 @@ type pending struct {
 	spotifyId string
 }
 
+// Each batch takes the most-played items without images first, so what's on profiles fills in first
 func fetchBatch() (int, error) {
-	total := 0
-
 	artists, err := queryPending(
-		`SELECT id, user_id, name, '', COALESCE(spotify_id, '') FROM artists
-		WHERE image_url IS NULL AND (image_fetched_at IS NULL OR image_fetched_at < now() - ` + retryAfter + `)
-		ORDER BY image_fetched_at NULLS FIRST, id LIMIT $1`)
+		`SELECT e.id, e.user_id, e.name, '', COALESCE(e.spotify_id, '')
+		FROM artists e
+		JOIN users u ON u.pk = e.user_id
+		LEFT JOIN (SELECT artist_id, COUNT(*) AS plays FROM history GROUP BY artist_id) p ON p.artist_id = e.id
+		WHERE ` + artistColumns.pendingCondition() + `
+		ORDER BY e.image_fetched_at IS NOT NULL, p.plays DESC NULLS LAST, e.id LIMIT $1`)
 	if err != nil {
-		return total, err
-	}
-	for _, p := range artists {
-		if err := fetchArtist(p); err != nil {
-			return total, err
-		}
-		total++
+		return 0, err
 	}
 
 	albums, err := queryPending(
-		`SELECT al.id, al.user_id, al.title, COALESCE(ar.name, ''), COALESCE(al.spotify_id, '')
-		FROM albums al LEFT JOIN artists ar ON ar.id = al.artist_id
-		WHERE al.cover_url IS NULL AND (al.cover_fetched_at IS NULL OR al.cover_fetched_at < now() - ` + retryAfter + `)
-		ORDER BY al.cover_fetched_at NULLS FIRST, al.id LIMIT $1`)
+		`SELECT e.id, e.user_id, e.title, COALESCE(ar.name, ''), COALESCE(e.spotify_id, '')
+		FROM albums e
+		JOIN users u ON u.pk = e.user_id
+		LEFT JOIN artists ar ON ar.id = e.artist_id
+		LEFT JOIN (
+			SELECT s.album_id, COUNT(*) AS plays FROM history h JOIN songs s ON s.id = h.song_id GROUP BY s.album_id
+		) p ON p.album_id = e.id
+		WHERE ` + albumColumns.pendingCondition() + `
+		ORDER BY e.cover_fetched_at IS NOT NULL, p.plays DESC NULLS LAST, e.id LIMIT $1`)
 	if err != nil {
-		return total, err
-	}
-	for _, p := range albums {
-		if err := fetchAlbum(p); err != nil {
-			return total, err
-		}
-		total++
+		return 0, err
 	}
 
 	// Songs normally show their album's cover, so only look them up once their album has none
 	songs, err := queryPending(
-		`SELECT s.id, s.user_id, s.title, COALESCE(ar.name, ''), COALESCE(s.spotify_id, '')
-		FROM songs s
-		LEFT JOIN artists ar ON ar.id = s.artist_id
-		LEFT JOIN albums al ON al.id = s.album_id
-		WHERE s.image_url IS NULL AND (s.image_fetched_at IS NULL OR s.image_fetched_at < now() - ` + retryAfter + `)
+		`SELECT e.id, e.user_id, e.title, COALESCE(ar.name, ''), COALESCE(e.spotify_id, '')
+		FROM songs e
+		JOIN users u ON u.pk = e.user_id
+		LEFT JOIN artists ar ON ar.id = e.artist_id
+		LEFT JOIN albums al ON al.id = e.album_id
+		LEFT JOIN (SELECT song_id, COUNT(*) AS plays FROM history GROUP BY song_id) p ON p.song_id = e.id
+		WHERE ` + songColumns.pendingCondition() + `
 			AND (al.id IS NULL OR (al.cover_url IS NULL AND al.cover_fetched_at IS NOT NULL))
-		ORDER BY s.image_fetched_at NULLS FIRST, s.id LIMIT $1`)
+		ORDER BY e.image_fetched_at IS NOT NULL, p.plays DESC NULLS LAST, e.id LIMIT $1`)
 	if err != nil {
-		return total, err
-	}
-	for _, p := range songs {
-		if err := fetchSong(p); err != nil {
-			return total, err
-		}
-		total++
+		return 0, err
 	}
 
-	return total, nil
+	var jobs []func() error
+	for _, p := range artists {
+		jobs = append(jobs, func() error { return fetchArtist(p) })
+	}
+	for _, p := range albums {
+		jobs = append(jobs, func() error { return fetchAlbum(p) })
+	}
+	for _, p := range songs {
+		jobs = append(jobs, func() error { return fetchSong(p) })
+	}
+	return runJobs(jobs)
+}
+
+// Runs lookups a few at a time (requests are still paced by throttle); returns how many ran
+// and the first error, if any
+func runJobs(jobs []func() error) (int, error) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var firstErr error
+	sem := make(chan struct{}, workers)
+	for _, job := range jobs {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if err := job(); err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	return len(jobs), firstErr
 }
 
 func queryPending(query string) ([]pending, error) {
@@ -178,66 +244,40 @@ func queryPending(query string) ([]pending, error) {
 	return result, rows.Err()
 }
 
-// Records a failed lookup so a row that always errors can't block the rest of the queue
-func markAttempted(table, column string, id int) {
-	_, err := db.Pool.Exec(context.Background(),
-		"UPDATE "+table+" SET "+column+" = now() WHERE id = $1", id)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error recording image lookup: %v\n", err)
-	}
-}
-
-// The image_url IS NULL guards keep a fetched image from overwriting one a user set mid-lookup
-
 func fetchArtist(p pending) error {
-	imageUrl, source, spotifyId, err := lookup(
+	r, err := lookup(
 		func() (string, string, error) { return spotifyArtistImage(p.userId, p.spotifyId, p.name) },
 		func() (string, error) { return deezerArtistImage(p.name) },
 	)
 	if err != nil {
-		markAttempted("artists", "image_fetched_at", p.id)
+		artistColumns.markAttempted(p.id)
 		return err
 	}
-	_, err = db.Pool.Exec(context.Background(),
-		`UPDATE artists SET image_url = NULLIF($2, ''), image_source = NULLIF($3, ''), image_fetched_at = now(),
-			spotify_id = COALESCE(spotify_id, NULLIF($4, ''))
-		WHERE id = $1 AND image_url IS NULL`,
-		p.id, imageUrl, source, spotifyId)
-	return err
+	return artistColumns.save(p.id, r)
 }
 
 func fetchAlbum(p pending) error {
-	imageUrl, source, spotifyId, err := lookup(
+	r, err := lookup(
 		func() (string, string, error) { return spotifyAlbumImage(p.userId, p.spotifyId, p.name, p.artist) },
 		func() (string, error) { return deezerAlbumImage(p.name, p.artist) },
 	)
 	if err != nil {
-		markAttempted("albums", "cover_fetched_at", p.id)
+		albumColumns.markAttempted(p.id)
 		return err
 	}
-	_, err = db.Pool.Exec(context.Background(),
-		`UPDATE albums SET cover_url = NULLIF($2, ''), cover_source = NULLIF($3, ''), cover_fetched_at = now(),
-			spotify_id = COALESCE(spotify_id, NULLIF($4, ''))
-		WHERE id = $1 AND cover_url IS NULL`,
-		p.id, imageUrl, source, spotifyId)
-	return err
+	return albumColumns.save(p.id, r)
 }
 
 func fetchSong(p pending) error {
-	imageUrl, source, spotifyId, err := lookup(
+	r, err := lookup(
 		func() (string, string, error) { return spotifySongImage(p.userId, p.spotifyId, p.name, p.artist) },
 		func() (string, error) { return deezerSongImage(p.name, p.artist) },
 	)
 	if err != nil {
-		markAttempted("songs", "image_fetched_at", p.id)
+		songColumns.markAttempted(p.id)
 		return err
 	}
-	_, err = db.Pool.Exec(context.Background(),
-		`UPDATE songs SET image_url = NULLIF($2, ''), image_source = NULLIF($3, ''), image_fetched_at = now(),
-			spotify_id = COALESCE(spotify_id, NULLIF($4, ''))
-		WHERE id = $1 AND image_url IS NULL`,
-		p.id, imageUrl, source, spotifyId)
-	return err
+	return songColumns.save(p.id, r)
 }
 
 // Immediately looks up an image for one entity ("artist", "album" or "song") that has none,

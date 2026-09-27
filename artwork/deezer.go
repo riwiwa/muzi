@@ -10,7 +10,7 @@ import (
 
 // Deezer's public search API needs no credentials, so it's the fallback for every user
 // Plain-text queries are used because Deezer's field filters (track:"..." artist:"...") often return nothing;
-// results are matched against the exact names instead
+// results are matched against the names instead (see match.go)
 const deezerAPIURL = "https://api.deezer.com"
 
 type deezerArtist struct {
@@ -79,40 +79,46 @@ func deezerArtistPicture(a deezerArtist) string {
 }
 
 func deezerArtistImage(name string) (string, error) {
-	var artists []deezerArtist
-	if err := deezerSearch("artist", name, &artists); err != nil {
-		return "", err
-	}
-	for _, a := range artists {
-		if sameName(a.Name, name) {
-			return deezerArtistPicture(a), nil
+	c, err := searchWithFallback(name, "", func(query string) ([]candidate, error) {
+		var artists []deezerArtist
+		if err := deezerSearch("artist", query, &artists); err != nil {
+			return nil, err
 		}
-	}
-	return "", nil
+		cands := make([]candidate, 0, len(artists))
+		for _, a := range artists {
+			cands = append(cands, candidate{title: a.Name, image: deezerArtistPicture(a)})
+		}
+		return cands, nil
+	})
+	return c.image, err
 }
 
 func deezerAlbumImage(title, artist string) (string, error) {
-	var albums []deezerAlbum
-	if err := deezerSearch("album", strings.TrimSpace(title+" "+artist), &albums); err != nil {
-		return "", err
-	}
-	for _, a := range albums {
-		if sameName(a.Title, title) && (artist == "" || sameName(a.Artist.Name, artist)) {
-			return a.CoverXl, nil
+	c, err := searchWithFallback(title, artist, func(query string) ([]candidate, error) {
+		var albums []deezerAlbum
+		if err := deezerSearch("album", query, &albums); err != nil {
+			return nil, err
 		}
-	}
-	return "", nil
+		cands := make([]candidate, 0, len(albums))
+		for _, a := range albums {
+			cands = append(cands, candidate{title: a.Title, artist: a.Artist.Name, image: a.CoverXl})
+		}
+		return cands, nil
+	})
+	return c.image, err
 }
 
 func deezerSongImage(title, artist string) (string, error) {
-	var tracks []deezerTrack
-	if err := deezerSearch("track", strings.TrimSpace(title+" "+artist), &tracks); err != nil {
-		return "", err
-	}
-	for _, t := range tracks {
-		if sameName(t.Title, title) && (artist == "" || sameName(t.Artist.Name, artist)) {
-			return t.Album.CoverXl, nil
+	c, err := searchWithFallback(title, artist, func(query string) ([]candidate, error) {
+		var tracks []deezerTrack
+		if err := deezerSearch("track", query, &tracks); err != nil {
+			return nil, err
 		}
-	}
-	return "", nil
+		cands := make([]candidate, 0, len(tracks))
+		for _, t := range tracks {
+			cands = append(cands, candidate{title: t.Title, artist: t.Artist.Name, image: t.Album.CoverXl})
+		}
+		return cands, nil
+	})
+	return c.image, err
 }

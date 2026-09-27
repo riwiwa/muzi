@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -13,8 +15,8 @@ import (
 	"muzi/scrobble"
 )
 
-const spotifyTokenURL = "https://accounts.spotify.com/api/token"
-const spotifyAPIURL = "https://api.spotify.com/v1"
+var spotifyTokenURL = "https://accounts.spotify.com/api/token"
+var spotifyAPIURL = "https://api.spotify.com/v1"
 
 // Returned when a user hasn't configured Spotify credentials, so lookups skip straight to Deezer
 var errNoSpotify = errors.New("spotify not configured")
@@ -54,7 +56,12 @@ type appToken struct {
 var (
 	tokenMu sync.Mutex
 	tokens  = map[int]appToken{}
+	// Users whose credentials were rejected, and until when to stop retrying them
+	tokenFailures = map[int]time.Time{}
 )
+
+// How long to skip Spotify for a user after their credentials are rejected
+const tokenFailureBackoff = 10 * time.Minute
 
 func spotifyAppToken(userId int) (string, error) {
 	tokenMu.Lock()
@@ -62,6 +69,9 @@ func spotifyAppToken(userId int) (string, error) {
 
 	if t, ok := tokens[userId]; ok && time.Now().Before(t.expiresAt) {
 		return t.accessToken, nil
+	}
+	if until, ok := tokenFailures[userId]; ok && time.Now().Before(until) {
+		return "", errNoSpotify
 	}
 
 	clientId, clientSecret, _, _, _, err := scrobble.GetUserSpotifyCredentials(userId)
@@ -84,7 +94,10 @@ func spotifyAppToken(userId int) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("spotify token request returned %d", resp.StatusCode)
+		tokenFailures[userId] = time.Now().Add(tokenFailureBackoff)
+		fmt.Fprintf(os.Stderr, "Spotify rejected client credentials for user %d (status %d); "+
+			"using Deezer for images for %v\n", userId, resp.StatusCode, tokenFailureBackoff)
+		return "", errNoSpotify
 	}
 
 	var body struct {
@@ -101,32 +114,80 @@ func spotifyAppToken(userId int) (string, error) {
 	return body.AccessToken, nil
 }
 
-func spotifyGet(userId int, path string, out any) error {
-	token, err := spotifyAppToken(userId)
-	if err != nil {
-		return err
-	}
-	throttle()
-	req, err := http.NewRequest("GET", spotifyAPIURL+path, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
+// When Spotify rate limits us (429), all Spotify requests wait out its Retry-After. Waits longer than
+// maxSpotifyWait fail instead so lookups fall back to Deezer and retry Spotify later.
+const maxSpotifyWait = time.Minute
 
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
+var errSpotifyLimited = errors.New("spotify rate limited")
+
+var (
+	pauseMu     sync.Mutex
+	pausedUntil time.Time
+)
+
+func waitForSpotify() error {
+	pauseMu.Lock()
+	wait := time.Until(pausedUntil)
+	pauseMu.Unlock()
+	if wait <= 0 {
+		return nil
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized {
-		tokenMu.Lock()
-		delete(tokens, userId)
-		tokenMu.Unlock()
+	if wait > maxSpotifyWait {
+		return errSpotifyLimited
 	}
-	if resp.StatusCode != http.StatusOK {
+	time.Sleep(wait)
+	return nil
+}
+
+func pauseSpotify(retryAfter string) {
+	seconds, err := strconv.Atoi(retryAfter)
+	if err != nil || seconds <= 0 {
+		seconds = 5
+	}
+	pauseMu.Lock()
+	if until := time.Now().Add(time.Duration(seconds) * time.Second); until.After(pausedUntil) {
+		pausedUntil = until
+	}
+	pauseMu.Unlock()
+}
+
+func spotifyGet(userId int, path string, out any) error {
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := waitForSpotify(); err != nil {
+			return err
+		}
+		token, err := spotifyAppToken(userId)
+		if err != nil {
+			return err
+		}
+		throttle()
+		req, err := http.NewRequest("GET", spotifyAPIURL+path, nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			defer resp.Body.Close()
+			return json.NewDecoder(resp.Body).Decode(out)
+		case http.StatusTooManyRequests:
+			pauseSpotify(resp.Header.Get("Retry-After"))
+			resp.Body.Close()
+			continue
+		case http.StatusUnauthorized:
+			tokenMu.Lock()
+			delete(tokens, userId)
+			tokenMu.Unlock()
+		}
+		resp.Body.Close()
 		return fmt.Errorf("spotify %s returned %d", path, resp.StatusCode)
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	return errSpotifyLimited
 }
 
 func spotifySearch(userId int, kind, query string, out any) error {
@@ -141,16 +202,11 @@ func largestImage(images []spotifyImage) string {
 	return images[0].Url
 }
 
-func hasArtist(artists []spotifyArtist, name string) bool {
-	if name == "" {
-		return true
+func firstArtist(artists []spotifyArtist) string {
+	if len(artists) == 0 {
+		return ""
 	}
-	for _, a := range artists {
-		if sameName(a.Name, name) {
-			return true
-		}
-	}
-	return false
+	return artists[0].Name
 }
 
 // Each lookup uses the entity's stored Spotify ID when there is one, otherwise searches by name.
@@ -165,20 +221,22 @@ func spotifyArtistImage(userId int, spotifyId, name string) (imageUrl, id string
 		return largestImage(a.Images), a.Id, nil
 	}
 
-	var res struct {
-		Artists struct {
-			Items []spotifyArtist `json:"items"`
-		} `json:"artists"`
-	}
-	if err := spotifySearch(userId, "artist", name, &res); err != nil {
-		return "", "", err
-	}
-	for _, a := range res.Artists.Items {
-		if sameName(a.Name, name) {
-			return largestImage(a.Images), a.Id, nil
+	c, err := searchWithFallback(name, "", func(query string) ([]candidate, error) {
+		var res struct {
+			Artists struct {
+				Items []spotifyArtist `json:"items"`
+			} `json:"artists"`
 		}
-	}
-	return "", "", nil
+		if err := spotifySearch(userId, "artist", query, &res); err != nil {
+			return nil, err
+		}
+		var cands []candidate
+		for _, a := range res.Artists.Items {
+			cands = append(cands, candidate{title: a.Name, image: largestImage(a.Images), spotifyId: a.Id})
+		}
+		return cands, nil
+	})
+	return c.image, c.spotifyId, err
 }
 
 func spotifyAlbumImage(userId int, spotifyId, title, artist string) (imageUrl, id string, err error) {
@@ -190,20 +248,27 @@ func spotifyAlbumImage(userId int, spotifyId, title, artist string) (imageUrl, i
 		return largestImage(a.Images), a.Id, nil
 	}
 
-	var res struct {
-		Albums struct {
-			Items []spotifyAlbum `json:"items"`
-		} `json:"albums"`
-	}
-	if err := spotifySearch(userId, "album", strings.TrimSpace(title+" "+artist), &res); err != nil {
-		return "", "", err
-	}
-	for _, a := range res.Albums.Items {
-		if sameName(a.Name, title) && hasArtist(a.Artists, artist) {
-			return largestImage(a.Images), a.Id, nil
+	c, err := searchWithFallback(title, artist, func(query string) ([]candidate, error) {
+		var res struct {
+			Albums struct {
+				Items []spotifyAlbum `json:"items"`
+			} `json:"albums"`
 		}
-	}
-	return "", "", nil
+		if err := spotifySearch(userId, "album", query, &res); err != nil {
+			return nil, err
+		}
+		var cands []candidate
+		for _, a := range res.Albums.Items {
+			cands = append(cands, candidate{
+				title:     a.Name,
+				artist:    firstArtist(a.Artists),
+				image:     largestImage(a.Images),
+				spotifyId: a.Id,
+			})
+		}
+		return cands, nil
+	})
+	return c.image, c.spotifyId, err
 }
 
 func spotifySongImage(userId int, spotifyId, title, artist string) (imageUrl, id string, err error) {
@@ -215,18 +280,25 @@ func spotifySongImage(userId int, spotifyId, title, artist string) (imageUrl, id
 		return largestImage(t.Album.Images), t.Id, nil
 	}
 
-	var res struct {
-		Tracks struct {
-			Items []spotifyTrack `json:"items"`
-		} `json:"tracks"`
-	}
-	if err := spotifySearch(userId, "track", strings.TrimSpace(title+" "+artist), &res); err != nil {
-		return "", "", err
-	}
-	for _, t := range res.Tracks.Items {
-		if sameName(t.Name, title) && hasArtist(t.Artists, artist) {
-			return largestImage(t.Album.Images), t.Id, nil
+	c, err := searchWithFallback(title, artist, func(query string) ([]candidate, error) {
+		var res struct {
+			Tracks struct {
+				Items []spotifyTrack `json:"items"`
+			} `json:"tracks"`
 		}
-	}
-	return "", "", nil
+		if err := spotifySearch(userId, "track", query, &res); err != nil {
+			return nil, err
+		}
+		var cands []candidate
+		for _, t := range res.Tracks.Items {
+			cands = append(cands, candidate{
+				title:     t.Name,
+				artist:    firstArtist(t.Artists),
+				image:     largestImage(t.Album.Images),
+				spotifyId: t.Id,
+			})
+		}
+		return cands, nil
+	})
+	return c.image, c.spotifyId, err
 }

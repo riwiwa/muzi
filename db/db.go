@@ -273,6 +273,7 @@ func AddHistoryEntityColumns() error {
 
 // image_source is "custom" for user-set images, or the provider name for fetched ones.
 // *_fetched_at records the last automatic lookup so misses aren't retried constantly.
+// *_spotify_checked records that Spotify was asked, so Deezer images get upgraded once Spotify is set up.
 func AddImageColumns() error {
 	_, err := Pool.Exec(
 		context.Background(),
@@ -283,6 +284,9 @@ func AddImageColumns() error {
 		ALTER TABLE songs ADD COLUMN IF NOT EXISTS image_url TEXT;
 		ALTER TABLE songs ADD COLUMN IF NOT EXISTS image_source TEXT;
 		ALTER TABLE songs ADD COLUMN IF NOT EXISTS image_fetched_at TIMESTAMPTZ;
+		ALTER TABLE artists ADD COLUMN IF NOT EXISTS image_spotify_checked BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_spotify_checked BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE songs ADD COLUMN IF NOT EXISTS image_spotify_checked BOOLEAN NOT NULL DEFAULT FALSE;
 		UPDATE artists SET image_source = 'custom' WHERE image_url IS NOT NULL AND image_source IS NULL;
 		UPDATE albums SET cover_source = 'custom' WHERE cover_url IS NOT NULL AND cover_source IS NULL;`,
 	)
