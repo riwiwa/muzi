@@ -9,13 +9,14 @@ import (
 )
 
 type settingsData struct {
-	Title            string
-	LoggedInUsername string
-	TemplateName     string
-	APIKey           string
-	APISecret        string
-	SpotifyClientId  string
-	SpotifyConnected bool
+	Title              string
+	LoggedInUsername   string
+	TemplateName       string
+	APIKey             string
+	APISecret          string
+	SpotifyClientId    string
+	SpotifyConnected   bool
+	SpotifyRedirectURI string
 }
 
 func settingsPageHandler() http.HandlerFunc {
@@ -39,13 +40,14 @@ func settingsPageHandler() http.HandlerFunc {
 		}
 
 		d := settingsData{
-			Title:            "muzi | Settings",
-			LoggedInUsername: username,
-			TemplateName:     "settings",
-			APIKey:           "",
-			APISecret:        "",
-			SpotifyClientId:  "",
-			SpotifyConnected: user.IsSpotifyConnected(),
+			Title:              "muzi | Settings",
+			LoggedInUsername:   username,
+			TemplateName:       "settings",
+			APIKey:             "",
+			APISecret:          "",
+			SpotifyClientId:    "",
+			SpotifyConnected:   user.IsSpotifyConnected(),
+			SpotifyRedirectURI: scrobble.SpotifyRedirectURI(r),
 		}
 
 		if user.ApiKey != nil {

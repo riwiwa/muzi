@@ -15,6 +15,9 @@ type Config struct {
 
 type ServerConfig struct {
 	Address string
+	// Externally visible base URL, e.g. "https://muzi.example.com"; used for the Spotify redirect URI.
+	// When empty it's derived from each request.
+	PublicUrl string `toml:"public_url"`
 }
 
 type ImagesConfig struct {

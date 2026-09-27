@@ -347,7 +347,10 @@ func UpdateUserSpotifyCheck(userId int) error {
 func GetUsersWithSpotify() ([]int, error) {
 	rows, err := db.Pool.Query(
 		context.Background(),
-		`SELECT pk FROM users WHERE spotify_client_id IS NOT NULL AND spotify_client_secret IS NOT NULL`,
+		// only users who completed "Connect Spotify"; saved client credentials alone can't read playback
+		`SELECT pk FROM users
+		WHERE NULLIF(spotify_client_id, '') IS NOT NULL AND NULLIF(spotify_client_secret, '') IS NOT NULL
+			AND NULLIF(spotify_refresh_token, '') IS NOT NULL`,
 	)
 	if err != nil {
 		return nil, err
@@ -439,10 +442,9 @@ func DeleteUserSpotifyCredentials(userId int) error {
 	return err
 }
 
+// Connected means the user authorized muzi; the access token itself expires hourly and is
+// refreshed by the poller using the refresh token
 func (u *User) IsSpotifyConnected() bool {
-	_, _, accessToken, _, expiresAt, err := GetUserSpotifyCredentials(u.Pk)
-	if err != nil || accessToken == "" {
-		return false
-	}
-	return time.Now().Before(expiresAt)
+	_, _, _, refreshToken, _, err := GetUserSpotifyCredentials(u.Pk)
+	return err == nil && refreshToken != ""
 }

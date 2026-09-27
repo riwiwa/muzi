@@ -91,6 +91,8 @@
           <h2>Spotify Integration</h2>
           <p>Connect your Spotify account to automatically import your listening history.</p>
           <p>Create a Spotify app at <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a> and enter your credentials below.</p>
+          <p>In the app's settings, add this exact Redirect URI: <code>{{.SpotifyRedirectURI}}</code></p>
+          <p class="info">Saving credentials is enough for artist and album images; connecting is only needed to scrobble your Spotify playback.</p>
           
           <form method="POST" action="/settings/update-spotify">
             <input type="text" name="spotify_client_id" placeholder="Spotify Client ID" value="{{.SpotifyClientId}}">
