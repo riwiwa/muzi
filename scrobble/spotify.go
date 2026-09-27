@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"muzi/config"
 	"muzi/db"
 )
 
@@ -103,8 +105,7 @@ func (h *SpotifyHandler) handleAuthorize(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	baseURL := getBaseURL(r)
-	redirectURI := baseURL + "/scrobble/spotify/callback"
+	redirectURI := SpotifyRedirectURI(r)
 
 	scope := "user-read-currently-playing user-read-recently-played"
 	authURL := fmt.Sprintf("%s?client_id=%s&response_type=code&redirect_uri=%s&scope=%s&state=%s",
@@ -129,8 +130,7 @@ func (h *SpotifyHandler) handleCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	baseURL := getBaseURL(r)
-	redirectURI := baseURL + "/scrobble/spotify/callback"
+	redirectURI := SpotifyRedirectURI(r)
 
 	token, err := exchangeCodeForToken(clientId, clientSecret, code, redirectURI)
 	if err != nil {
@@ -402,6 +402,35 @@ func getBaseURL(r *http.Request) string {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
+}
+
+// The redirect URI sent to Spotify; it must exactly match one registered in the Spotify app.
+// Uses server.public_url when set, otherwise the address the request came in on (honoring reverse
+// proxy headers). Spotify rejects http://localhost, so it's swapped for the loopback IP it does allow.
+func SpotifyRedirectURI(r *http.Request) string {
+	if base := strings.TrimRight(config.Get().Server.PublicUrl, "/"); base != "" {
+		return base + "/scrobble/spotify/callback"
+	}
+
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = strings.TrimSpace(strings.Split(proto, ",")[0])
+	}
+	host := r.Host
+	if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
+		host = strings.TrimSpace(strings.Split(fwd, ",")[0])
+	}
+	if scheme == "http" {
+		if hostname, port, err := net.SplitHostPort(host); err == nil && hostname == "localhost" {
+			host = net.JoinHostPort("127.0.0.1", port)
+		} else if host == "localhost" {
+			host = "127.0.0.1"
+		}
+	}
+	return scheme + "://" + host + "/scrobble/spotify/callback"
 }
 
 func GetSpotifyAuthURL(userId int, baseURL string) (string, error) {

@@ -160,6 +160,10 @@ func ImportSpotify(tracks []SpotifyTrack,
 		batchStart += batchSize
 	}
 
+	if err := db.BackfillEntities(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating albums and songs after import: %v\n", err)
+	}
+
 	sendProgressUpdate(
 		progressChan,
 		totalBatches,

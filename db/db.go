@@ -41,6 +41,9 @@ func CreateAllTables() error {
 	if err := AddHistoryEntityColumns(); err != nil {
 		return err
 	}
+	if err := AddImageColumns(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -127,8 +130,11 @@ func CreateUsersTable() error {
 			spotify_refresh_token TEXT,
 			spotify_token_expires TIMESTAMPTZ,
 			last_spotify_check TIMESTAMPTZ,
+			settings JSONB DEFAULT '{"artist_delimiters": [], "split_ignore": []}'::jsonb,
 			pk SERIAL PRIMARY KEY
 		);
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS settings JSONB
+			DEFAULT '{"artist_delimiters": [], "split_ignore": []}'::jsonb;
 		CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key);`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating users table: %v\n", err)
@@ -234,9 +240,11 @@ func CreateSongsTable() error {
 			album_id INTEGER REFERENCES albums(id) ON DELETE SET NULL,
 			duration_ms INTEGER,
 			spotify_id TEXT,
-			musicbrainz_id TEXT,
-			UNIQUE (user_id, title, artist_id)
+			musicbrainz_id TEXT
 		);
+		ALTER TABLE songs DROP CONSTRAINT IF EXISTS songs_user_id_title_artist_id_key;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_songs_user_title_artist_album
+			ON songs(user_id, title, artist_id, album_id) NULLS NOT DISTINCT;
 		CREATE INDEX IF NOT EXISTS idx_songs_user_title ON songs(user_id, title);
 		CREATE INDEX IF NOT EXISTS idx_songs_user_title_trgm ON songs USING gin(title gin_trgm_ops);`)
 	if err != nil {
@@ -247,15 +255,43 @@ func CreateSongsTable() error {
 }
 
 func AddHistoryEntityColumns() error {
-	_, err := Pool.Exec(context.Background(),
+	_, err := Pool.Exec(
+		context.Background(),
 		`ALTER TABLE history ADD COLUMN IF NOT EXISTS artist_id INTEGER REFERENCES artists(id) ON DELETE SET NULL;
 		ALTER TABLE history ADD COLUMN IF NOT EXISTS song_id INTEGER REFERENCES songs(id) ON DELETE SET NULL;
 		ALTER TABLE history ADD COLUMN IF NOT EXISTS artist_ids INTEGER[] DEFAULT '{}';
 		CREATE INDEX IF NOT EXISTS idx_history_artist_id ON history(artist_id);
 		CREATE INDEX IF NOT EXISTS idx_history_song_id ON history(song_id);
-		CREATE INDEX IF NOT EXISTS idx_history_artist_ids ON history USING gin(artist_ids);`)
+		CREATE INDEX IF NOT EXISTS idx_history_artist_ids ON history USING gin(artist_ids);`,
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error adding history entity columns: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+// image_source is "custom" for user-set images, or the provider name for fetched ones.
+// *_fetched_at records the last automatic lookup so misses aren't retried constantly.
+// *_spotify_checked records that Spotify was asked, so Deezer images get upgraded once Spotify is set up.
+func AddImageColumns() error {
+	_, err := Pool.Exec(
+		context.Background(),
+		`ALTER TABLE artists ADD COLUMN IF NOT EXISTS image_source TEXT;
+		ALTER TABLE artists ADD COLUMN IF NOT EXISTS image_fetched_at TIMESTAMPTZ;
+		ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_source TEXT;
+		ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_fetched_at TIMESTAMPTZ;
+		ALTER TABLE songs ADD COLUMN IF NOT EXISTS image_url TEXT;
+		ALTER TABLE songs ADD COLUMN IF NOT EXISTS image_source TEXT;
+		ALTER TABLE songs ADD COLUMN IF NOT EXISTS image_fetched_at TIMESTAMPTZ;
+		ALTER TABLE artists ADD COLUMN IF NOT EXISTS image_spotify_checked BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_spotify_checked BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE songs ADD COLUMN IF NOT EXISTS image_spotify_checked BOOLEAN NOT NULL DEFAULT FALSE;
+		UPDATE artists SET image_source = 'custom' WHERE image_url IS NOT NULL AND image_source IS NULL;
+		UPDATE albums SET cover_source = 'custom' WHERE cover_url IS NOT NULL AND cover_source IS NULL;`,
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error adding image columns: %v\n", err)
 		return err
 	}
 	return nil

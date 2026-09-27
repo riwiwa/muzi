@@ -39,6 +39,7 @@ type Song struct {
 	DurationMs    int
 	SpotifyId     string
 	MusicbrainzId string
+	ImageUrl      string
 }
 
 func GetOrCreateArtist(userId int, name string) (int, bool, error) {
@@ -114,9 +115,19 @@ func GetArtistByName(userId int, name string) (Artist, error) {
 	return artist, nil
 }
 
+// A changed image_url is marked as a custom override; an empty one hands the image back to auto-fetching.
 func UpdateArtist(id int, name, imageUrl, bio, spotifyId, musicbrainzId string) error {
 	_, err := Pool.Exec(context.Background(),
-		`UPDATE artists SET name = $1, image_url = $2, bio = $3, spotify_id = $4, musicbrainz_id = $5 WHERE id = $6`,
+		`UPDATE artists SET
+			name = $1,
+			image_source = CASE
+				WHEN $2 = '' THEN NULL
+				WHEN image_url IS DISTINCT FROM $2 THEN 'custom'
+				ELSE image_source END,
+			image_fetched_at = CASE WHEN $2 = '' THEN NULL ELSE image_fetched_at END,
+			image_url = NULLIF($2, ''),
+			bio = $3, spotify_id = $4, musicbrainz_id = $5
+		WHERE id = $6`,
 		name, imageUrl, bio, spotifyId, musicbrainzId, id)
 	return err
 }
@@ -191,7 +202,9 @@ func GetOrCreateAlbum(userId int, title string, artistId int) (int, bool, error)
 func GetAlbumById(id int) (Album, error) {
 	var album Album
 	err := Pool.QueryRow(context.Background(),
-		"SELECT id, user_id, title, artist_id, cover_url, spotify_id, musicbrainz_id FROM albums WHERE id = $1",
+		`SELECT id, user_id, title, COALESCE(artist_id, 0), COALESCE(cover_url, ''),
+			COALESCE(spotify_id, ''), COALESCE(musicbrainz_id, '')
+		FROM albums WHERE id = $1`,
 		id).Scan(&album.Id, &album.UserId, &album.Title, &album.ArtistId, &album.CoverUrl,
 		&album.SpotifyId, &album.MusicbrainzId)
 	if err != nil {
@@ -240,6 +253,9 @@ func UpdateAlbum(id int, title, coverUrl, spotifyId, musicbrainzId string) error
 	_, err := Pool.Exec(context.Background(),
 		`UPDATE albums SET 
 			title = COALESCE(NULLIF($1, ''), title),
+			cover_source = CASE
+				WHEN $2 <> '' AND cover_url IS DISTINCT FROM $2 THEN 'custom'
+				ELSE cover_source END,
 			cover_url = COALESCE(NULLIF($2, ''), cover_url),
 			spotify_id = COALESCE(NULLIF($3, ''), spotify_id),
 			musicbrainz_id = COALESCE(NULLIF($4, ''), musicbrainz_id)
@@ -254,7 +270,12 @@ func UpdateAlbumField(id int, field string, value string) error {
 	case "title":
 		query = "UPDATE albums SET title = $1 WHERE id = $2"
 	case "cover_url":
-		query = "UPDATE albums SET cover_url = $1 WHERE id = $2"
+		// empty value resets the cover to auto-fetching
+		query = `UPDATE albums SET
+			cover_source = CASE WHEN $1 = '' THEN NULL ELSE 'custom' END,
+			cover_fetched_at = NULL,
+			cover_url = NULLIF($1, '')
+		WHERE id = $2`
 	case "spotify_id":
 		query = "UPDATE albums SET spotify_id = $1 WHERE id = $2"
 	case "musicbrainz_id":
@@ -307,6 +328,48 @@ func SearchAlbums(userId int, query string) ([]Album, float64, error) {
 	return albums, maxSim, nil
 }
 
+// Creates album and song rows for history entries that don't have them yet (imports only
+// create artists) and links each entry to its song
+func BackfillEntities() error {
+	tx, err := Pool.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+
+	_, err = tx.Exec(context.Background(),
+		`INSERT INTO albums (user_id, title, artist_id)
+		SELECT DISTINCT user_id, album_name, artist_id FROM history
+		WHERE song_id IS NULL AND artist_id IS NOT NULL AND album_name IS NOT NULL AND album_name <> ''
+		ON CONFLICT (user_id, title, artist_id) DO NOTHING`)
+	if err != nil {
+		return fmt.Errorf("creating albums: %w", err)
+	}
+
+	_, err = tx.Exec(context.Background(),
+		`INSERT INTO songs (user_id, title, artist_id, album_id)
+		SELECT DISTINCT h.user_id, h.song_name, h.artist_id, al.id
+		FROM history h
+		LEFT JOIN albums al ON al.user_id = h.user_id AND al.title = h.album_name AND al.artist_id = h.artist_id
+		WHERE h.song_id IS NULL AND h.artist_id IS NOT NULL AND h.song_name <> ''
+		ON CONFLICT (user_id, title, artist_id, album_id) DO NOTHING`)
+	if err != nil {
+		return fmt.Errorf("creating songs: %w", err)
+	}
+
+	_, err = tx.Exec(context.Background(),
+		`UPDATE history h SET song_id = s.id
+		FROM songs s
+		LEFT JOIN albums al ON al.id = s.album_id
+		WHERE h.song_id IS NULL AND s.user_id = h.user_id AND s.title = h.song_name
+			AND s.artist_id = h.artist_id AND COALESCE(al.title, '') = COALESCE(h.album_name, '')`)
+	if err != nil {
+		return fmt.Errorf("linking history to songs: %w", err)
+	}
+
+	return tx.Commit(context.Background())
+}
+
 func GetOrCreateSong(userId int, title string, artistId int, albumId int) (int, bool, error) {
 	if title == "" {
 		return 0, false, nil
@@ -344,9 +407,11 @@ func GetOrCreateSong(userId int, title string, artistId int, albumId int) (int, 
 func GetSongById(id int) (Song, error) {
 	var song Song
 	err := Pool.QueryRow(context.Background(),
-		"SELECT id, user_id, title, artist_id, album_id, duration_ms, spotify_id, musicbrainz_id FROM songs WHERE id = $1",
+		`SELECT id, user_id, title, COALESCE(artist_id, 0), COALESCE(album_id, 0), COALESCE(duration_ms, 0),
+			COALESCE(spotify_id, ''), COALESCE(musicbrainz_id, ''), COALESCE(image_url, '')
+		FROM songs WHERE id = $1`,
 		id).Scan(&song.Id, &song.UserId, &song.Title, &song.ArtistId, &song.AlbumId,
-		&song.DurationMs, &song.SpotifyId, &song.MusicbrainzId)
+		&song.DurationMs, &song.SpotifyId, &song.MusicbrainzId, &song.ImageUrl)
 	if err != nil {
 		return Song{}, err
 	}
@@ -399,11 +464,13 @@ func GetSongsByName(userId int, title string, artistId int) ([]Song, error) {
 	var query string
 	var args []interface{}
 	if artistId > 0 {
-		query = `SELECT id, user_id, title, artist_id, album_id, duration_ms, spotify_id, musicbrainz_id 
+		query = `SELECT id, user_id, title, artist_id, album_id, duration_ms, spotify_id, musicbrainz_id,
+			COALESCE(image_url, '')
 			FROM songs WHERE user_id = $1 AND title = $2 AND artist_id = $3 ORDER BY id`
 		args = []interface{}{userId, title, artistId}
 	} else {
-		query = `SELECT id, user_id, title, artist_id, album_id, duration_ms, spotify_id, musicbrainz_id 
+		query = `SELECT id, user_id, title, artist_id, album_id, duration_ms, spotify_id, musicbrainz_id,
+			COALESCE(image_url, '')
 			FROM songs WHERE user_id = $1 AND title = $2 ORDER BY id`
 		args = []interface{}{userId, title}
 	}
@@ -423,7 +490,7 @@ func GetSongsByName(userId int, title string, artistId int) ([]Song, error) {
 
 		err := rows.Scan(
 			&song.Id, &song.UserId, &song.Title, &artistIdVal, &albumIdVal,
-			&durationMs, &spotifyIdPg, &musicbrainzIdPg)
+			&durationMs, &spotifyIdPg, &musicbrainzIdPg, &song.ImageUrl)
 		if err != nil {
 			return nil, err
 		}
@@ -457,6 +524,18 @@ func UpdateSong(id int, title string, durationMs int, spotifyId, musicbrainzId s
 	_, err = Pool.Exec(context.Background(),
 		`UPDATE history SET song_name = $1 WHERE song_id = $2`,
 		title, id)
+	return err
+}
+
+// Sets a custom image for a song; an empty url hands it back to auto-fetching.
+func UpdateSongImage(id int, imageUrl string) error {
+	_, err := Pool.Exec(context.Background(),
+		`UPDATE songs SET
+			image_source = CASE WHEN $1 = '' THEN NULL ELSE 'custom' END,
+			image_fetched_at = NULL,
+			image_url = NULLIF($1, '')
+		WHERE id = $2`,
+		imageUrl, id)
 	return err
 }
 
@@ -606,7 +685,7 @@ func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAl
 		rows, err = Pool.Query(context.Background(),
 			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
 			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
 			WHERE h.user_id = $1 AND h.album_name IS NOT NULL AND h.album_name != ''
 			GROUP BY h.album_name, h.artist, a.cover_url
 			ORDER BY listen_count DESC
@@ -616,7 +695,7 @@ func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAl
 		rows, err = Pool.Query(context.Background(),
 			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
 			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
 			WHERE h.user_id = $1 AND h.timestamp >= $2 AND h.album_name IS NOT NULL AND h.album_name != ''
 			GROUP BY h.album_name, h.artist, a.cover_url
 			ORDER BY listen_count DESC
@@ -626,7 +705,7 @@ func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAl
 		rows, err = Pool.Query(context.Background(),
 			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
 			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
 			WHERE h.user_id = $1 AND h.timestamp <= $2 AND h.album_name IS NOT NULL AND h.album_name != ''
 			GROUP BY h.album_name, h.artist, a.cover_url
 			ORDER BY listen_count DESC
@@ -636,7 +715,7 @@ func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAl
 		rows, err = Pool.Query(context.Background(),
 			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
 			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id IN (SELECT id FROM artists WHERE user_id = h.user_id AND name = h.artist)
+			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
 			WHERE h.user_id = $1 AND h.timestamp >= $2 AND h.timestamp <= $3 AND h.album_name IS NOT NULL AND h.album_name != ''
 			GROUP BY h.album_name, h.artist, a.cover_url
 			ORDER BY listen_count DESC

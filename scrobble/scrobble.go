@@ -111,7 +111,12 @@ func GetUserBySessionKey(sessionKey string) (int, string, error) {
 }
 
 func SaveScrobble(scrobble Scrobble) error {
-	exists, err := checkDuplicate(scrobble.UserId, scrobble.Artist, scrobble.SongName, scrobble.Timestamp)
+	exists, err := checkDuplicate(
+		scrobble.UserId,
+		scrobble.Artist,
+		scrobble.SongName,
+		scrobble.Timestamp,
+	)
 	if err != nil {
 		return err
 	}
@@ -139,18 +144,33 @@ func SaveScrobble(scrobble Scrobble) error {
 		}
 	}
 
-	songId, _, err := db.GetOrCreateSong(scrobble.UserId, scrobble.SongName, primaryArtistId, albumId)
+	songId, _, err := db.GetOrCreateSong(
+		scrobble.UserId,
+		scrobble.SongName,
+		primaryArtistId,
+		albumId,
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting/creating song: %v\n", err)
 		return err
 	}
 
-	_, err = db.Pool.Exec(context.Background(),
+	_, err = db.Pool.Exec(
+		context.Background(),
 		`INSERT INTO history (user_id, timestamp, song_name, artist, album_name, ms_played, platform, artist_id, song_id, artist_ids)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (user_id, song_name, artist, timestamp) DO NOTHING`,
-		scrobble.UserId, scrobble.Timestamp, scrobble.SongName, scrobble.Artist,
-		scrobble.Album, scrobble.MsPlayed, scrobble.Platform, primaryArtistId, songId, artistIds)
+		scrobble.UserId,
+		scrobble.Timestamp,
+		scrobble.SongName,
+		scrobble.Artist,
+		scrobble.Album,
+		scrobble.MsPlayed,
+		scrobble.Platform,
+		primaryArtistId,
+		songId,
+		artistIds,
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error saving scrobble: %v\n", err)
 		return err
@@ -162,6 +182,7 @@ func parseArtistString(artist string) []string {
 	if artist == "" {
 		return nil
 	}
+	// TODO: split using the current user's settings.artist_delimiters instead of only ","
 	var artists []string
 	for _, a := range strings.Split(artist, ",") {
 		a = strings.TrimSpace(a)
@@ -271,7 +292,9 @@ func ClearNowPlayingPlatform(userId int, platform string) {
 	}
 }
 
-func GetUserSpotifyCredentials(userId int) (clientId, clientSecret, accessToken, refreshToken string, expiresAt time.Time, err error) {
+func GetUserSpotifyCredentials(
+	userId int,
+) (clientId, clientSecret, accessToken, refreshToken string, expiresAt time.Time, err error) {
 	var clientIdPg, clientSecretPg, accessTokenPg, refreshTokenPg pgtype.Text
 	var expiresAtPg pgtype.Timestamptz
 	err = db.Pool.QueryRow(context.Background(),
@@ -322,8 +345,13 @@ func UpdateUserSpotifyCheck(userId int) error {
 }
 
 func GetUsersWithSpotify() ([]int, error) {
-	rows, err := db.Pool.Query(context.Background(),
-		`SELECT pk FROM users WHERE spotify_client_id IS NOT NULL AND spotify_client_secret IS NOT NULL`)
+	rows, err := db.Pool.Query(
+		context.Background(),
+		// only users who completed "Connect Spotify"; saved client credentials alone can't read playback
+		`SELECT pk FROM users
+		WHERE NULLIF(spotify_client_id, '') IS NOT NULL AND NULLIF(spotify_client_secret, '') IS NOT NULL
+			AND NULLIF(spotify_refresh_token, '') IS NOT NULL`,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -350,6 +378,12 @@ type User struct {
 	ApiSecret           *string
 	SpotifyClientId     *string
 	SpotifyClientSecret *string
+	Settings            UserSettings
+}
+
+type UserSettings struct {
+	ArtistDelimiters []string `json:"artist_delimiters"`
+	SplitIgnore      []string `json:"split_ignore"`
 }
 
 func GetUserById(userId int) (User, error) {
@@ -357,10 +391,10 @@ func GetUserById(userId int) (User, error) {
 	var apiKey, apiSecret, spotifyClientId, spotifyClientSecret pgtype.Text
 	err := db.Pool.QueryRow(context.Background(),
 		`SELECT pk, username, bio, pfp, allow_duplicate_edits, api_key, api_secret, 
-			spotify_client_id, spotify_client_secret
+			spotify_client_id, spotify_client_secret, settings
 		FROM users WHERE pk = $1`,
 		userId).Scan(&user.Pk, &user.Username, &user.Bio, &user.Pfp,
-		&user.AllowDuplicateEdits, &apiKey, &apiSecret, &spotifyClientId, &spotifyClientSecret)
+		&user.AllowDuplicateEdits, &apiKey, &apiSecret, &spotifyClientId, &spotifyClientSecret, &user.Settings)
 	if err != nil {
 		return User{}, err
 	}
@@ -408,10 +442,9 @@ func DeleteUserSpotifyCredentials(userId int) error {
 	return err
 }
 
+// Connected means the user authorized muzi; the access token itself expires hourly and is
+// refreshed by the poller using the refresh token
 func (u *User) IsSpotifyConnected() bool {
-	_, _, accessToken, _, expiresAt, err := GetUserSpotifyCredentials(u.Pk)
-	if err != nil || accessToken == "" {
-		return false
-	}
-	return time.Now().Before(expiresAt)
+	_, _, _, refreshToken, _, err := GetUserSpotifyCredentials(u.Pk)
+	return err == nil && refreshToken != ""
 }

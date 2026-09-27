@@ -1,5 +1,10 @@
 {{define "song"}}
   <div class="profile-top">
+    {{if .ImageUrl}}
+    <img class="editable-image album-cover" data-entity="song" data-id="{{.Song.Id}}" data-field="image_url" src="{{.ImageUrl}}" alt="{{.Song.Title}}'s cover">
+    {{else}}
+    <img class="editable-image album-cover" data-entity="song" data-id="{{.Song.Id}}" data-field="image_url" src="/files/assets/pfps/default_album.png" alt="{{.Song.Title}}'s cover">
+    {{end}}
     <div class="username-bio">
       <h1>
         {{.Song.Title}}
@@ -71,7 +76,9 @@
         <label>Title: <input type="text" name="title" value="{{.Song.Title}}"></label>
         <label>Spotify ID: <input type="text" name="spotify_id" value="{{.Song.SpotifyId}}"></label>
         <label>MusicBrainz ID: <input type="text" name="musicbrainz_id" value="{{.Song.MusicbrainzId}}"></label>
+        <p class="modal-hint">Click the image to upload your own.</p>
         <div class="modal-buttons">
+          <button type="button" class="cancel-btn reset-image-btn" onclick="resetImage('song', {{.Song.Id}}, 'image_url')">Use automatic image</button>
           <button type="button" class="cancel-btn" onclick="closeEditModal()">Cancel</button>
           <button type="submit">Save</button>
         </div>

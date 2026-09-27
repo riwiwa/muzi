@@ -10,10 +10,19 @@ import (
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
+	Images   ImagesConfig
 }
 
 type ServerConfig struct {
 	Address string
+	// Externally visible base URL, e.g. "https://muzi.example.com"; used for the Spotify redirect URI.
+	// When empty it's derived from each request.
+	PublicUrl string `toml:"public_url"`
+}
+
+type ImagesConfig struct {
+	// Automatically fetch missing artist/album/song images from Spotify and Deezer
+	AutoFetch bool `toml:"auto_fetch"`
 }
 
 type DatabaseConfig struct {
@@ -37,6 +46,9 @@ func LoadConfig() (*Config, error) {
 			User:     "postgres",
 			Password: "postgres",
 			Name:     "muzi",
+		},
+		Images: ImagesConfig{
+			AutoFetch: true,
 		},
 	}
 

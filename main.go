@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"muzi/artwork"
 	"muzi/config"
 	"muzi/db"
 	"muzi/scrobble"
@@ -34,7 +35,9 @@ func main() {
 	defer db.Pool.Close()
 
 	check("ensuring all tables exist", db.CreateAllTables())
+	check("creating albums and songs for imported history", db.BackfillEntities())
 	check("cleaning expired sessions", db.CleanupExpiredSessions())
 	scrobble.StartSpotifyPoller()
+	artwork.Start()
 	web.Start()
 }
