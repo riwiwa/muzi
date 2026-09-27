@@ -723,6 +723,17 @@ a.button:hover {
   font-size: 1em;
 }
 
+.modal-buttons .reset-image-btn {
+  margin-right: auto;
+}
+
+.modal-hint {
+  margin: 0;
+  color: #999;
+  font-size: 0.9em;
+  text-align: left;
+}
+
 .modal-buttons button[type="submit"] {
   background: #1DB954;
   color: #fff;

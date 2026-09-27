@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,9 +15,12 @@ import (
 	"sort"
 	"strconv"
 
+	"muzi/artwork"
+	"muzi/config"
 	"muzi/db"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 type ArtistData struct {
@@ -35,6 +39,7 @@ type ArtistData struct {
 type SongData struct {
 	Username         string
 	Song             db.Song
+	ImageUrl         string
 	Artist           db.Artist
 	ArtistNames      []string
 	Albums           []db.Album
@@ -236,9 +241,24 @@ func songPageHandler() http.HandlerFunc {
 			return
 		}
 
+		// a song's own image (custom, or fetched when its album has no cover) wins over the album cover
+		imageUrl := ""
+		for _, s := range songs {
+			if s.ImageUrl != "" {
+				imageUrl = s.ImageUrl
+				break
+			}
+		}
+		for _, a := range albums {
+			if imageUrl == "" && a.CoverUrl != "" {
+				imageUrl = a.CoverUrl
+			}
+		}
+
 		songData := SongData{
 			Username:         username,
 			Song:             song,
+			ImageUrl:         imageUrl,
 			Artist:           artist,
 			ArtistNames:      artistNames,
 			Albums:           albums,
@@ -578,6 +598,10 @@ func artistInlineEditHandler() http.HandlerFunc {
 			return
 		}
 
+		if field == "image_url" && req.Value == "" {
+			refreshImage("artist", artistId)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"success": "true"})
 	}
@@ -667,14 +691,22 @@ func songInlineEditHandler() http.HandlerFunc {
 			return
 		}
 
-		song, _ := db.GetSongById(songId)
-		updateErr := db.UpdateSong(
-			songId,
-			req.Value,
-			song.AlbumId,
-			song.SpotifyId,
-			song.MusicbrainzId,
-		)
+		var updateErr error
+		if field == "image_url" {
+			updateErr = db.UpdateSongImage(songId, req.Value)
+			if updateErr == nil && req.Value == "" {
+				refreshImage("song", songId)
+			}
+		} else {
+			song, _ := db.GetSongById(songId)
+			updateErr = db.UpdateSong(
+				songId,
+				req.Value,
+				song.DurationMs,
+				song.SpotifyId,
+				song.MusicbrainzId,
+			)
+		}
 
 		if updateErr != nil {
 			fmt.Fprintf(os.Stderr, "Error updating song: %v\n", updateErr)
@@ -711,7 +743,7 @@ func songBatchEditHandler() http.HandlerFunc {
 		song, _ := db.GetSongById(songId)
 
 		title := song.Title
-		albumId := song.AlbumId
+		durationMs := song.DurationMs
 		spotifyId := song.SpotifyId
 		musicbrainzId := song.MusicbrainzId
 
@@ -719,7 +751,7 @@ func songBatchEditHandler() http.HandlerFunc {
 			title = req.Title
 		}
 		if req.Duration > 0 {
-			albumId = req.Duration
+			durationMs = req.Duration
 		}
 		if req.SpotifyId != "" {
 			spotifyId = req.SpotifyId
@@ -728,7 +760,7 @@ func songBatchEditHandler() http.HandlerFunc {
 			musicbrainzId = req.MusicbrainzId
 		}
 
-		updateErr := db.UpdateSong(songId, title, albumId, spotifyId, musicbrainzId)
+		updateErr := db.UpdateSong(songId, title, durationMs, spotifyId, musicbrainzId)
 		if updateErr != nil {
 			fmt.Fprintf(os.Stderr, "Error updating song: %v\n", updateErr)
 			http.Error(w, updateErr.Error(), http.StatusInternalServerError)
@@ -780,6 +812,10 @@ func albumInlineEditHandler() http.HandlerFunc {
 			fmt.Fprintf(os.Stderr, "Error updating album: %v\n", updateErr)
 			http.Error(w, updateErr.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		if field == "cover_url" && req.Value == "" {
+			refreshImage("album", albumId)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -937,6 +973,17 @@ func searchHandler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		jsonBytes, _ := json.Marshal(results)
 		w.Write(jsonBytes)
+	}
+}
+
+// Looks up a new image right away after a user resets one to automatic, so the page reload shows it
+func refreshImage(entity string, id int) {
+	if !config.Get().Images.AutoFetch {
+		return
+	}
+	err := artwork.Refresh(entity, id)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		fmt.Fprintf(os.Stderr, "Error fetching %s image: %v\n", entity, err)
 	}
 }
 

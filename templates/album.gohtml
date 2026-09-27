@@ -62,7 +62,9 @@
         <label>Title: <input type="text" name="title" value="{{.Album.Title}}"></label>
         <label>Spotify ID: <input type="text" name="spotify_id" value="{{.Album.SpotifyId}}"></label>
         <label>MusicBrainz ID: <input type="text" name="musicbrainz_id" value="{{.Album.MusicbrainzId}}"></label>
+        <p class="modal-hint">Click the image to upload your own.</p>
         <div class="modal-buttons">
+          <button type="button" class="cancel-btn reset-image-btn" onclick="resetImage('album', {{.Album.Id}}, 'cover_url')">Use automatic image</button>
           <button type="button" class="cancel-btn" onclick="closeEditModal()">Cancel</button>
           <button type="submit">Save</button>
         </div>

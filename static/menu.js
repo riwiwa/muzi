@@ -193,3 +193,20 @@ function openEditModal() {
 function closeEditModal() {
   document.getElementById('editModal').style.display = 'none';
 }
+
+// Clears a custom image so it's fetched automatically again
+function resetImage(entityType, entityId, field) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('PATCH', '/api/' + entityType + '/' + entityId + '/edit?field=' + field, true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      if (xhr.status === 200) {
+        location.reload();
+      } else {
+        alert('Error resetting image: ' + xhr.responseText);
+      }
+    }
+  };
+  xhr.send(JSON.stringify({ value: '' }));
+}
