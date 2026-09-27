@@ -54,6 +54,9 @@ function handleImport(formId, progressPrefix, endpoint, progressUrl, formatLabel
           progressFill.classList.remove('animating');
           progressStatus.textContent = 'Import completed!';
           progressSuccess.textContent = 'Successfully imported ' + update.tracks_imported.toLocaleString() + ' tracks from ' + (progressPrefix === 'spotify' ? 'Spotify' : 'Last.fm');
+          if (update.error) {
+            progressError.textContent = 'Warning: ' + update.error;
+          }
           eventSource.close();
           form.reset();
         } else if (update.status === 'error') {
