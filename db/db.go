@@ -240,9 +240,11 @@ func CreateSongsTable() error {
 			album_id INTEGER REFERENCES albums(id) ON DELETE SET NULL,
 			duration_ms INTEGER,
 			spotify_id TEXT,
-			musicbrainz_id TEXT,
-			UNIQUE (user_id, title, artist_id)
+			musicbrainz_id TEXT
 		);
+		ALTER TABLE songs DROP CONSTRAINT IF EXISTS songs_user_id_title_artist_id_key;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_songs_user_title_artist_album
+			ON songs(user_id, title, artist_id, album_id) NULLS NOT DISTINCT;
 		CREATE INDEX IF NOT EXISTS idx_songs_user_title ON songs(user_id, title);
 		CREATE INDEX IF NOT EXISTS idx_songs_user_title_trgm ON songs USING gin(title gin_trgm_ops);`)
 	if err != nil {

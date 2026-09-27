@@ -222,6 +222,10 @@ func ImportLastFM(
 		totalImported,
 		lfmUsername)
 
+	if err := db.BackfillEntities(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating albums and songs after import: %v\n", err)
+	}
+
 	// send completion update
 	if progressChan != nil {
 		progressChan <- ProgressUpdate{

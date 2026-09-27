@@ -328,6 +328,48 @@ func SearchAlbums(userId int, query string) ([]Album, float64, error) {
 	return albums, maxSim, nil
 }
 
+// Creates album and song rows for history entries that don't have them yet (imports only
+// create artists) and links each entry to its song
+func BackfillEntities() error {
+	tx, err := Pool.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+
+	_, err = tx.Exec(context.Background(),
+		`INSERT INTO albums (user_id, title, artist_id)
+		SELECT DISTINCT user_id, album_name, artist_id FROM history
+		WHERE song_id IS NULL AND artist_id IS NOT NULL AND album_name IS NOT NULL AND album_name <> ''
+		ON CONFLICT (user_id, title, artist_id) DO NOTHING`)
+	if err != nil {
+		return fmt.Errorf("creating albums: %w", err)
+	}
+
+	_, err = tx.Exec(context.Background(),
+		`INSERT INTO songs (user_id, title, artist_id, album_id)
+		SELECT DISTINCT h.user_id, h.song_name, h.artist_id, al.id
+		FROM history h
+		LEFT JOIN albums al ON al.user_id = h.user_id AND al.title = h.album_name AND al.artist_id = h.artist_id
+		WHERE h.song_id IS NULL AND h.artist_id IS NOT NULL AND h.song_name <> ''
+		ON CONFLICT (user_id, title, artist_id, album_id) DO NOTHING`)
+	if err != nil {
+		return fmt.Errorf("creating songs: %w", err)
+	}
+
+	_, err = tx.Exec(context.Background(),
+		`UPDATE history h SET song_id = s.id
+		FROM songs s
+		LEFT JOIN albums al ON al.id = s.album_id
+		WHERE h.song_id IS NULL AND s.user_id = h.user_id AND s.title = h.song_name
+			AND s.artist_id = h.artist_id AND COALESCE(al.title, '') = COALESCE(h.album_name, '')`)
+	if err != nil {
+		return fmt.Errorf("linking history to songs: %w", err)
+	}
+
+	return tx.Commit(context.Background())
+}
+
 func GetOrCreateSong(userId int, title string, artistId int, albumId int) (int, bool, error) {
 	if title == "" {
 		return 0, false, nil

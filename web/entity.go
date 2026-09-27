@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"muzi/artwork"
 	"muzi/config"
@@ -131,6 +132,20 @@ func artistPageHandler() http.HandlerFunc {
 	}
 }
 
+// Profile links use the scrobbled artist string, which can list several artists ("A, B");
+// fall back to the primary (first) artist, which is what albums and songs are filed under
+func getLinkedArtist(userId int, artistName string) (db.Artist, error) {
+	artist, err := db.GetArtistByName(userId, artistName)
+	if err == nil {
+		return artist, nil
+	}
+	primary := strings.TrimSpace(strings.Split(artistName, ",")[0])
+	if primary == artistName || primary == "" {
+		return db.Artist{}, err
+	}
+	return db.GetArtistByName(userId, primary)
+}
+
 func songPageHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := chi.URLParam(r, "username")
@@ -152,7 +167,7 @@ func songPageHandler() http.HandlerFunc {
 			return
 		}
 
-		artist, err := db.GetArtistByName(userId, artistName)
+		artist, err := getLinkedArtist(userId, artistName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot find artist %s: %v\n", artistName, err)
 			http.Error(w, "Artist not found", http.StatusNotFound)
@@ -381,7 +396,7 @@ func albumPageHandler() http.HandlerFunc {
 			return
 		}
 
-		artist, err := db.GetArtistByName(userId, artistName)
+		artist, err := getLinkedArtist(userId, artistName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot find artist %s: %v\n", artistName, err)
 			http.Error(w, "Artist not found", http.StatusNotFound)
