@@ -200,6 +200,7 @@ type periodOption struct {
 // Period filters for profile charts, in display order
 func periods() []periodOption {
 	return []periodOption{
+		{"day", "Today"},
 		{"week", "7d"},
 		{"month", "30d"},
 		{"year", "Year"},
