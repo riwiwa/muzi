@@ -54,6 +54,19 @@
       </div>
 
       <div class="card">
+        <h2>Visibility</h2>
+        <p>Public profiles can be viewed by anyone with the link and found in search. Private profiles are only visible to you.</p>
+        <form method="POST" action="/settings/update-visibility">
+          <label class="switch-row">
+            <input type="checkbox" name="public_profile" {{if .PublicProfile}}checked{{end}} onchange="this.form.submit()">
+            <span>Share my profile publicly</span>
+          </label>
+          <noscript><div><button type="submit">Save</button></div></noscript>
+          {{if .PublicProfile}}<p class="note" style="margin: 0">Your profile: <a class="ok" href="{{.ProfileURL}}">{{.ProfileURL}}</a></p>{{end}}
+        </form>
+      </div>
+
+      <div class="card">
         <h2>Bio</h2>
         <p>A line or two about your taste. Shown under your name on your profile; leave it empty to hide it.</p>
         <form method="POST" action="/settings/update-bio">

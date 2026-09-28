@@ -91,36 +91,79 @@ func (h *SpotifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Kept for old links: authorization now starts from the logged-in settings page
 func (h *SpotifyHandler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
-	userId := r.URL.Query().Get("user_id")
-	if userId == "" {
-		http.Error(w, "Missing user_id", http.StatusBadRequest)
-		return
-	}
+	http.Redirect(w, r, "/settings/spotify-connect", http.StatusSeeOther)
+}
 
-	clientId, _, _, _, _, err := GetUserSpotifyCredentials(userIdToInt(userId))
-	fmt.Fprintf(os.Stderr, "handleAuthorize: userId=%s, clientId='%s', err=%v\n", userId, clientId, err)
+// Pending authorizations, keyed by the random OAuth state sent to Spotify
+type oauthState struct {
+	userId  int
+	expires time.Time
+}
+
+const oauthStateLifetime = 10 * time.Minute
+
+var (
+	oauthMu     sync.Mutex
+	oauthStates = map[string]oauthState{}
+)
+
+// Builds the Spotify authorization URL for a logged-in user. The state is random and single use,
+// so a callback can only complete an authorization that user started.
+func SpotifyAuthorizeURL(userId int, r *http.Request) (string, error) {
+	clientId, _, _, _, _, err := GetUserSpotifyCredentials(userId)
 	if err != nil || clientId == "" {
-		http.Error(w, "Spotify credentials not configured", http.StatusBadRequest)
-		return
+		return "", fmt.Errorf("Spotify credentials not configured")
+	}
+	state, err := GenerateSessionKey()
+	if err != nil {
+		return "", err
 	}
 
-	redirectURI := SpotifyRedirectURI(r)
+	oauthMu.Lock()
+	now := time.Now()
+	for k, v := range oauthStates {
+		if now.After(v.expires) {
+			delete(oauthStates, k)
+		}
+	}
+	oauthStates[state] = oauthState{userId: userId, expires: now.Add(oauthStateLifetime)}
+	oauthMu.Unlock()
 
-	scope := "user-read-currently-playing user-read-recently-played"
-	authURL := fmt.Sprintf("%s?client_id=%s&response_type=code&redirect_uri=%s&scope=%s&state=%s",
-		SpotifyAuthURL, url.QueryEscape(clientId), url.QueryEscape(redirectURI), url.QueryEscape(scope), userId)
+	params := url.Values{}
+	params.Set("client_id", clientId)
+	params.Set("response_type", "code")
+	params.Set("redirect_uri", SpotifyRedirectURI(r))
+	params.Set("scope", "user-read-currently-playing user-read-recently-played")
+	params.Set("state", state)
+	return SpotifyAuthURL + "?" + params.Encode(), nil
+}
 
-	http.Redirect(w, r, authURL, http.StatusSeeOther)
+// Returns the user an OAuth state belongs to, consuming it
+func takeOAuthState(state string) (int, bool) {
+	oauthMu.Lock()
+	defer oauthMu.Unlock()
+	s, ok := oauthStates[state]
+	delete(oauthStates, state)
+	if !ok || time.Now().After(s.expires) {
+		return 0, false
+	}
+	return s.userId, true
 }
 
 func (h *SpotifyHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
-	userId := userIdToInt(state)
-
 	if code == "" || state == "" {
 		http.Error(w, "Missing parameters", http.StatusBadRequest)
+		return
+	}
+
+	userId, ok := takeOAuthState(state)
+	if !ok {
+		http.Error(w, "This Spotify authorization expired or wasn't started here. Try Connect Spotify again.",
+			http.StatusBadRequest)
 		return
 	}
 
@@ -247,6 +290,11 @@ func StartSpotifyPoller() {
 }
 
 func pollSpotify(userId int) error {
+	// Spotify is rate limiting this user's app; recently played (last 50 tracks) catches up afterwards
+	if SpotifyPaused(userId) {
+		return nil
+	}
+
 	clientId, clientSecret, accessToken, refreshToken, expiresAt, err := GetUserSpotifyCredentials(userId)
 	if err != nil {
 		return err
@@ -273,6 +321,9 @@ func pollSpotify(userId int) error {
 		fmt.Fprintf(os.Stderr, "Error checking currently playing: %v\n", err)
 	}
 
+	if SpotifyPaused(userId) {
+		return nil
+	}
 	err = checkRecentPlays(userId, accessToken)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking recent plays: %v\n", err)
@@ -301,6 +352,10 @@ func checkCurrentlyPlaying(userId int, accessToken string) error {
 		return nil
 	}
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		PauseSpotify(userId, resp.Header.Get("Retry-After"), "playback polling")
+		return nil
+	}
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("currently playing returned %d", resp.StatusCode)
 	}
@@ -348,6 +403,10 @@ func checkRecentPlays(userId int, accessToken string) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		PauseSpotify(userId, resp.Header.Get("Retry-After"), "playback polling")
+		return nil
+	}
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("recently played returned %d", resp.StatusCode)
 	}
@@ -390,12 +449,6 @@ func checkRecentPlays(userId int, accessToken string) error {
 	return nil
 }
 
-func userIdToInt(s string) int {
-	var id int
-	fmt.Sscanf(s, "%d", &id)
-	return id
-}
-
 func getBaseURL(r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil {
@@ -431,19 +484,6 @@ func SpotifyRedirectURI(r *http.Request) string {
 		}
 	}
 	return scheme + "://" + host + "/scrobble/spotify/callback"
-}
-
-func GetSpotifyAuthURL(userId int, baseURL string) (string, error) {
-	clientId, _, _, _, _, err := GetUserSpotifyCredentials(userId)
-	if err != nil || clientId == "" {
-		return "", fmt.Errorf("Spotify credentials not configured")
-	}
-
-	redirectURI := baseURL + "/scrobble/spotify/callback"
-	scope := "user-read-currently-playing user-read-recently-played"
-
-	return fmt.Sprintf("%s?client_id=%s&response_type=code&redirect_uri=%s&scope=%s&state=%d",
-		SpotifyAuthURL, url.QueryEscape(clientId), url.QueryEscape(redirectURI), url.QueryEscape(scope), userId), nil
 }
 
 type LastTrack struct {

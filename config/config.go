@@ -18,6 +18,9 @@ type ServerConfig struct {
 	// Externally visible base URL, e.g. "https://muzi.example.com"; used for the Spotify redirect URI.
 	// When empty it's derived from each request.
 	PublicUrl string `toml:"public_url"`
+	// Let anyone who can reach the server create an account. The first account can always be
+	// created; after that signup is closed unless this is set.
+	AllowSignup bool `toml:"allow_signup"`
 }
 
 type ImagesConfig struct {

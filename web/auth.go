@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 
+	"muzi/config"
 	"muzi/db"
 
 	"golang.org/x/crypto/bcrypt"
@@ -51,7 +52,16 @@ func verifyPassword(hashedPassword string, enteredPassword []byte) bool {
 
 // Handles the submission of new account credentials. Stores credentials in
 // the users table. Sets a browser cookie for successful new users.
+// Signup is open for the first account, then only if the config allows it
+func signupOpen(r *http.Request) bool {
+	return config.Get().Server.AllowSignup || !hasUsers(r.Context())
+}
+
 func createAccount(w http.ResponseWriter, r *http.Request) {
+	if !signupOpen(r) {
+		http.Error(w, "Signup is closed on this server", http.StatusForbidden)
+		return
+	}
 	if r.Method == "POST" {
 		err := r.ParseForm()
 		if err != nil {
@@ -111,10 +121,14 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 // Renders the create account page
 func createAccountPageHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !signupOpen(r) {
+			http.Redirect(w, r, "/login?error=signup-closed", http.StatusSeeOther)
+			return
+		}
 		type data struct {
 			Error string
 		}
-		d := data{Error: "len"}
+		d := data{Error: r.URL.Query().Get("error")}
 		err := templates.ExecuteTemplate(w, "create_account.gohtml", d)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -172,9 +186,10 @@ func loginSubmit(w http.ResponseWriter, r *http.Request) {
 func loginPageHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		type data struct {
-			Error string
+			Error      string
+			SignupOpen bool
 		}
-		d := data{Error: r.URL.Query().Get("error")}
+		d := data{Error: r.URL.Query().Get("error"), SignupOpen: signupOpen(r)}
 		err := templates.ExecuteTemplate(w, "login.gohtml", d)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

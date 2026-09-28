@@ -110,6 +110,10 @@ func Start() {
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
+		if !canViewProfile(r, userId) {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
 		albums, _, _ := db.SearchAlbums(userId, albumTitle)
 		if len(albums) > 0 {
 			album := albums[0]
@@ -156,6 +160,7 @@ func Start() {
 	r.Post("/settings/update-spotify", updateSpotifyCredentialsHandler)
 	r.Post("/settings/update-pfp", updateProfilePictureHandler)
 	r.Post("/settings/update-bio", updateBioHandler)
+	r.Post("/settings/update-visibility", updateVisibilityHandler)
 	fmt.Printf("WebUI starting on %s\n", addr)
 	prot := http.NewCrossOriginProtection()
 	http.ListenAndServe(addr, prot.Handler(r))

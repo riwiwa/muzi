@@ -515,7 +515,11 @@ main {
   overflow-x: auto;
   padding-bottom: 6px;
   scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
 }
+.heatmap-scroll::-webkit-scrollbar { height: 6px; }
+.heatmap-scroll::-webkit-scrollbar-track { background: transparent; }
+.heatmap-scroll::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
 .heatmap {
   display: flex;
   gap: 3px;
@@ -777,6 +781,17 @@ code {
 .pfp-edit { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .pfp-preview { width: 112px; }
 .pfp-fields { flex: 1 1 240px; display: grid; gap: 12px; }
+
+/* checkbox rows in settings */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: var(--text);
+  cursor: pointer;
+}
+.switch-row input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
 
 .js .no-js-only { display: none; }
 

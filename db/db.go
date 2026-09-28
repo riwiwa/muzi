@@ -44,6 +44,9 @@ func CreateAllTables() error {
 	if err := AddImageColumns(); err != nil {
 		return err
 	}
+	if err := AddUserColumns(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -71,9 +74,10 @@ func CreateDB() error {
 	}
 	defer conn.Close(context.Background())
 
+	name := config.Get().Database.Name
 	var exists bool
 	err = conn.QueryRow(context.Background(),
-		"SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = 'muzi')").Scan(&exists)
+		"SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", name).Scan(&exists)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking if database exists: %v\n", err)
 		return err
@@ -83,9 +87,9 @@ func CreateDB() error {
 		return nil
 	}
 
-	_, err = conn.Exec(context.Background(), "CREATE DATABASE muzi")
+	_, err = conn.Exec(context.Background(), "CREATE DATABASE "+pgx.Identifier{name}.Sanitize())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating muzi database: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error creating %s database: %v\n", name, err)
 		return err
 	}
 	return nil
@@ -292,6 +296,25 @@ func AddImageColumns() error {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error adding image columns: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+// lastfm_session_key: sessions for Last.fm-compatible clients, kept apart from the API secret.
+// spotify_paused_until: when Spotify's rate limit on the user's app ends; shared by playback
+// polling and image lookups, and kept across restarts.
+// public_profile: whether others can see the user's profile and find them in search.
+func AddUserColumns() error {
+	_, err := Pool.Exec(
+		context.Background(),
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS lastfm_session_key TEXT;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS spotify_paused_until TIMESTAMPTZ;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS public_profile BOOLEAN NOT NULL DEFAULT FALSE;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_lastfm_session_key ON users(lastfm_session_key);`,
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error adding user columns: %v\n", err)
 		return err
 	}
 	return nil

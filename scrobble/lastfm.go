@@ -3,6 +3,7 @@ package scrobble
 import (
 	"context"
 	"crypto/md5"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -88,12 +89,14 @@ func (h *LastFMHandler) respondOK(w http.ResponseWriter, content string) {
 	w.Write([]byte(content))
 }
 
+// Audioscrobbler 1.2 handshake. Clients are configured with the user's muzi API key as their
+// password and send a = md5(md5(password) + t); the key is never sent itself.
 func (h *LastFMHandler) handleHandshake(w http.ResponseWriter, r *http.Request) {
 	username := r.URL.Query().Get("u")
-	token := r.URL.Query().Get("t")
-	authToken := r.URL.Query().Get("a")
+	timestamp := r.URL.Query().Get("t")
+	authToken := strings.ToLower(r.URL.Query().Get("a"))
 
-	if username == "" || token == "" || authToken == "" {
+	if username == "" || timestamp == "" || authToken == "" {
 		w.Write([]byte("BADAUTH"))
 		return
 	}
@@ -104,23 +107,54 @@ func (h *LastFMHandler) handleHandshake(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	sessionKey, err := GenerateSessionKey()
-	if err != nil {
-		w.Write([]byte("FAILED Could not generate session"))
+	var apiKey *string
+	err = db.Pool.QueryRow(context.Background(), "SELECT api_key FROM users WHERE pk = $1", userId).Scan(&apiKey)
+	if err != nil || apiKey == nil || *apiKey == "" {
+		w.Write([]byte("BADAUTH"))
+		return
+	}
+	expected := md5Hex(md5Hex(*apiKey) + timestamp)
+	if subtle.ConstantTimeCompare([]byte(expected), []byte(authToken)) != 1 {
+		w.Write([]byte("BADAUTH"))
 		return
 	}
 
-	_, err = db.Pool.Exec(context.Background(),
-		`UPDATE users SET api_secret = $1 WHERE pk = $2`,
-		sessionKey, userId)
+	sessionKey, err := lastFMSession(userId)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error updating session key: %v\n", err)
-		w.Write([]byte("FAILED Database error"))
+		fmt.Fprintf(os.Stderr, "Error creating Last.fm session: %v\n", err)
+		w.Write([]byte("FAILED Could not create session"))
 		return
 	}
 
 	baseURL := getBaseURL(r)
 	w.Write([]byte(fmt.Sprintf("OK\n%s\n%s/2.0/\n%s/2.0/\n", sessionKey, baseURL, baseURL)))
+}
+
+func md5Hex(s string) string {
+	sum := md5.Sum([]byte(s))
+	return hex.EncodeToString(sum[:])
+}
+
+// Returns the user's Last.fm-compatible session key, creating one if needed. Existing keys are
+// reused so several clients can stay logged in at once.
+func lastFMSession(userId int) (string, error) {
+	var existing *string
+	err := db.Pool.QueryRow(context.Background(),
+		"SELECT lastfm_session_key FROM users WHERE pk = $1", userId).Scan(&existing)
+	if err != nil {
+		return "", err
+	}
+	if existing != nil && *existing != "" {
+		return *existing, nil
+	}
+
+	sessionKey, err := GenerateSessionKey()
+	if err != nil {
+		return "", err
+	}
+	_, err = db.Pool.Exec(context.Background(),
+		"UPDATE users SET lastfm_session_key = $1 WHERE pk = $2", sessionKey, userId)
+	return sessionKey, err
 }
 
 func (h *LastFMHandler) handleGetToken(w http.ResponseWriter, apiKey string) {
@@ -152,17 +186,9 @@ func (h *LastFMHandler) handleGetSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	sessionKey, err := GenerateSessionKey()
+	sessionKey, err := lastFMSession(userId)
 	if err != nil {
-		h.respond(w, "failed", 16, "Service temporarily unavailable")
-		return
-	}
-
-	_, err = db.Pool.Exec(context.Background(),
-		`UPDATE users SET api_secret = $1 WHERE pk = $2`,
-		sessionKey, userId)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error updating session key: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error creating Last.fm session: %v\n", err)
 		h.respond(w, "failed", 16, "Service temporarily unavailable")
 		return
 	}

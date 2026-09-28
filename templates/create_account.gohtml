@@ -11,7 +11,7 @@
     <main class="auth-card">
       <div class="wordmark">muzi</div>
       <p>Start a listening diary that's yours.</p>
-      {{if eq .Error "length"}}<div class="login-error">Passwords must be 8–64 characters.</div>{{end}}
+      {{if eq .Error "passlength"}}<div class="login-error">Passwords must be 8–64 characters.</div>{{end}}
       {{if eq .Error "session"}}<div class="login-error">Unable to create a session. Please try again.</div>{{end}}
       {{if eq .Error "userlength"}}<div class="login-error">Please choose a username.</div>{{end}}
       {{if eq .Error "usertaken"}}<div class="login-error">That username is taken.</div>{{end}}

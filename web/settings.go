@@ -25,6 +25,8 @@ type settingsData struct {
 	PfpError           string
 	Bio                string
 	BioMaxLength       int
+	PublicProfile      bool
+	ProfileURL         string
 }
 
 const bioMaxLength = 500
@@ -64,6 +66,13 @@ func settingsPageHandler() http.HandlerFunc {
 			PfpError:           r.URL.Query().Get("pfp_error"),
 			Bio:                user.Bio,
 			BioMaxLength:       bioMaxLength,
+			ProfileURL:         "/profile/" + username,
+		}
+
+		err = db.Pool.QueryRow(r.Context(), "SELECT public_profile FROM users WHERE pk = $1", userId).
+			Scan(&d.PublicProfile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading profile visibility: %v\n", err)
 		}
 
 		if user.ApiKey != nil {
@@ -166,22 +175,12 @@ func spotifyConnectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := scrobble.GetUserById(userId)
+	authURL, err := scrobble.SpotifyAuthorizeURL(userId, r)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "spotifyConnectHandler: GetUserById error: %v\n", err)
 		http.Redirect(w, r, "/settings?tab=scrobble", http.StatusSeeOther)
 		return
 	}
-
-	fmt.Fprintf(os.Stderr, "spotifyConnectHandler: SpotifyClientId is nil or empty, redirecting to settings\n")
-
-	if user.SpotifyClientId == nil || *user.SpotifyClientId == "" {
-		fmt.Fprintf(os.Stderr, "spotifyConnectHandler: SpotifyClientId is nil or empty, redirecting to settings\n")
-		http.Redirect(w, r, "/settings?tab=scrobble", http.StatusSeeOther)
-		return
-	}
-
-	http.Redirect(w, r, fmt.Sprintf("/scrobble/spotify/authorize?user_id=%d", userId), http.StatusSeeOther)
+	http.Redirect(w, r, authURL, http.StatusSeeOther)
 }
 
 // Sets the logged-in user's profile picture from an upload, or back to the default
@@ -242,6 +241,31 @@ func updateBioHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error updating bio: %v\n", err)
 		http.Error(w, "Error saving bio", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/settings?tab=profile", http.StatusSeeOther)
+}
+
+// Makes the logged-in user's profile visible to everyone, or only to themselves
+func updateVisibilityHandler(w http.ResponseWriter, r *http.Request) {
+	username := getLoggedInUsername(r)
+	if username == "" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	userId, err := getUserIdByUsername(r.Context(), username)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+
+	public := r.FormValue("public_profile") == "on"
+	_, err = db.Pool.Exec(r.Context(), "UPDATE users SET public_profile = $1 WHERE pk = $2", public, userId)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error updating profile visibility: %v\n", err)
+		http.Error(w, "Error saving profile visibility", http.StatusInternalServerError)
 		return
 	}
 

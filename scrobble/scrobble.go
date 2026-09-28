@@ -103,7 +103,7 @@ func GetUserBySessionKey(sessionKey string) (int, string, error) {
 	var userId int
 	var username string
 	err := db.Pool.QueryRow(context.Background(),
-		"SELECT pk, username FROM users WHERE api_secret = $1", sessionKey).Scan(&userId, &username)
+		"SELECT pk, username FROM users WHERE lastfm_session_key = $1", sessionKey).Scan(&userId, &username)
 	if err != nil {
 		return 0, "", err
 	}
