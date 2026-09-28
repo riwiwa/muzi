@@ -10,6 +10,7 @@
 - **Live scrobbling:** Last.fm-compatible and ListenBrainz-compatible endpoints, plus Spotify playback polling. Players show up as **now playing**.
 - **Profile:** top artists, albums and tracks for any period, including custom date ranges, shown as a mosaic or a ranked chart.
 - **Rhythm:** a year-long heatmap of daily plays, a 24-hour listening clock, and listening streaks.
+- **Grid maker:** an N×N collage (1×1 up to 10×10) of your top albums or artists for any period. Save it as a PNG or copy it to your clipboard in one click.
 - **Artwork:** artist, album and track images are fetched automatically from Spotify (if you add credentials) or Deezer. Upload your own to override any of them.
 - **Search:** press `/` or `Ctrl+K` anywhere to search your library.
 - **Editing:** rename artists, albums and tracks, remove scrobbles, and add plays by hand. Multi-artist tracks are split into their artists.
@@ -23,6 +24,8 @@
 | ![Artist page](docs/screenshots/artist.jpg) | ![Album page](docs/screenshots/album.jpg) |
 
 ![Top albums, top tracks and recently played](docs/screenshots/charts.jpg)
+
+<p align="center"><img src="docs/screenshots/grid.jpg" alt="The grid maker showing a 4×4 album collage with names" width="560"></p>
 
 <p align="center"><img src="docs/screenshots/mobile.jpg" alt="muzi on a phone" width="560"></p>
 
@@ -108,9 +111,9 @@ The credentials alone are enough for Spotify artwork; connecting is only needed 
 
 - WebUI \[In Progress\]
     - Full listening history with time \[Complete\]
-    - Daily, weekly, monthly, yearly, lifetime presets for listening reports
-    - Ability to specify a certain point in time from one datetime to another to list data
-    - Grid maker (3x3-10x10)
+    - Daily, weekly, monthly, yearly, lifetime presets for listening reports \[In Progress\]
+    - Ability to specify a certain point in time from one datetime to another to list data \[In Progress\]
+    - Grid maker (3x3-10x10) \[Complete\]
     - Ability to change artist and album images \[Complete\]
 - Multi artist scrobbling \[Complete\]
 - Live scrobbling to the server (With Now playing status) \[Complete\]
