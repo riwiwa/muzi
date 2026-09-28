@@ -1,395 +1,185 @@
 {{define "profile"}}
-  <div class="profile-top">
-    <img src="{{.Pfp}}" alt="{{.Username}}'s avatar">
-    <div class="username-bio">
+  <section class="hero">
+    {{/* the profile glows with the colors of your #1 artist */}}
+    {{range $i, $a := .TopArtists}}{{if and (eq $i 0) $a.Artist.ImageUrl}}
+    <img class="hero-backdrop" src="{{$a.Artist.ImageUrl}}" alt="" aria-hidden="true">
+    {{end}}{{end}}
+    <div class="hero-art round">
+      <img src="{{.Pfp}}" alt="{{.Username}}'s avatar" decoding="async">
+    </div>
+    <div class="hero-text">
+      <div class="eyebrow">Listening diary</div>
       <h1>{{.Username}}</h1>
-      <h2>{{.Bio}}</h2>
-    </div>
-    <div class="profile-top-blank">
-    </div>
-      <div class="user-stats-top">
-        <h3>{{formatInt .ScrobbleCount}}</h3> <p>Listens<p>
-        <h3>{{formatInt .TrackCount}}</h3> <p>Unique Tracks<p>
-        <h3>{{formatInt .ArtistCount}}</h3> <p>Artists<p>
+      {{if .Bio}}<div class="hero-sub hero-bio">{{.Bio}}</div>{{end}}
+      <div class="stats">
+        <div class="stat"><b>{{formatInt .ScrobbleCount}}</b><span>Listens</span></div>
+        <div class="stat"><b>{{formatInt .TrackCount}}</b><span>Tracks</span></div>
+        <div class="stat"><b>{{formatInt .ArtistCount}}</b><span>Artists</span></div>
       </div>
-  </div>
-  <div class="top-artists">
-    <div class="top-artists-controls">
-      <h3>Top Artists</h3>
-      <div class="controls-row">
-        <label>
-          Period:
-          <select id="period-select" onchange="updateTopArtists()">
-            <option value="all_time" {{if eq .TopArtistsPeriod "all_time"}}selected{{end}}>All Time</option>
-            <option value="week" {{if eq .TopArtistsPeriod "week"}}selected{{end}}>Last 7 Days</option>
-            <option value="month" {{if eq .TopArtistsPeriod "month"}}selected{{end}}>Last 30 Days</option>
-            <option value="year" {{if eq .TopArtistsPeriod "year"}}selected{{end}}>Last Year</option>
-            <option value="custom" {{if eq .TopArtistsPeriod "custom"}}selected{{end}}>Custom</option>
-          </select>
-        </label>
-        <div id="custom-dates" style="display: {{if eq .TopArtistsPeriod "custom"}}inline-block{{else}}none{{end}};">
-          <input type="date" id="start-date" onchange="updateTopArtists()">
-          <input type="date" id="end-date" onchange="updateTopArtists()">
+    </div>
+  </section>
+
+  {{with .Rhythm}}
+  <section class="block" id="rhythm">
+    <header class="block-head">
+      <h2>Rhythm <em>· the past year</em></h2>
+    </header>
+    <div class="rhythm">
+      <div>
+        <div class="heatmap-scroll" data-scroll-end>
+          <div class="heatmap" role="img" aria-label="Plays per day over the past year">
+            {{range .Weeks}}
+            <div class="hw">
+              {{if .MonthLabel}}<span class="hw-label">{{.MonthLabel}}</span>{{end}}
+              {{range .Days}}<i class="hc l{{.Level}}{{if .Future}} future{{end}}"{{if not .Future}} title="{{formatInt .Count}} plays · {{.Date.Format "Mon, Jan 2 2006"}}"{{end}}></i>{{end}}
+            </div>
+            {{end}}
+          </div>
         </div>
-        <label>
-          Count:
-          <select id="limit-select" onchange="updateTopArtists()">
-            <option value="5" {{if eq .TopArtistsLimit 5}}selected{{end}}>5</option>
-            <option value="6" {{if eq .TopArtistsLimit 6}}selected{{end}}>6</option>
-            <option value="7" {{if eq .TopArtistsLimit 7}}selected{{end}}>7</option>
-            <option value="8" {{if eq .TopArtistsLimit 8}}selected{{end}}>8</option>
-            <option value="9" {{if eq .TopArtistsLimit 9}}selected{{end}}>9</option>
-            <option value="10" {{if eq .TopArtistsLimit 10}}selected{{end}}>10</option>
-            <option value="15" {{if eq .TopArtistsLimit 15}}selected{{end}}>15</option>
-            <option value="20" {{if eq .TopArtistsLimit 20}}selected{{end}}>20</option>
-            <option value="25" {{if eq .TopArtistsLimit 25}}selected{{end}}>25</option>
-            <option value="30" {{if eq .TopArtistsLimit 30}}selected{{end}}>30</option>
-          </select>
-        </label>
-        <label>
-          View:
-          <select id="view-select" onchange="updateLimitOptions(); updateTopArtists()">
-            <option value="grid" {{if eq .TopArtistsView "grid"}}selected{{end}}>Grid</option>
-            <option value="list" {{if eq .TopArtistsView "list"}}selected{{end}}>List</option>
-          </select>
-        </label>
+        <div class="heat-legend" aria-hidden="true">
+          <span>less</span><i class="hc"></i><i class="hc l1"></i><i class="hc l2"></i><i class="hc l3"></i><i class="hc l4"></i><span>more</span>
+        </div>
+        <div class="rhythm-stats">
+          <div class="stat"><b>{{formatInt .YearTotal}}</b><span>Plays</span></div>
+          <div class="stat"><b>{{.ActiveDays}}</b><span>Active days</span></div>
+          <div class="stat"><b>{{.CurrentStreak}}</b><span>Day streak</span></div>
+          <div class="stat"><b>{{.LongestStreak}}</b><span>Longest streak</span></div>
+          {{if .BusiestCount}}
+          <div class="stat" title="{{.BusiestDay.Format "Monday, January 2 2006"}}"><b>{{formatInt .BusiestCount}}</b><span>Busiest · {{.BusiestDay.Format "Jan 2"}}</span></div>
+          {{end}}
+        </div>
       </div>
+      <svg class="clock" viewBox="0 0 200 200" role="img" aria-label="Plays by hour of day{{if .PeakHour}}, peaking at {{.PeakHour}}{{end}}">
+        <circle class="ring" cx="100" cy="100" r="30"/>
+        <circle class="ring" cx="100" cy="100" r="88" stroke-dasharray="1 4"/>
+        {{range .Clock}}
+        <line x1="{{.X1}}" y1="{{.Y1}}" x2="{{.X2}}" y2="{{.Y2}}"{{if .Peak}} class="peak"{{end}}><title>{{hourLabel .Hour}} · {{formatInt .Count}} plays</title></line>
+        {{end}}
+        <text x="100" y="5">12a</text>
+        <text x="195" y="100">6a</text>
+        <text x="100" y="196">12p</text>
+        <text x="5" y="100">6p</text>
+        {{if .PeakHour}}
+        <text class="clock-peak" x="100" y="97">{{.PeakHour}}</text>
+        <text class="clock-caption" x="100" y="113">PEAK</text>
+        {{end}}
+      </svg>
     </div>
+  </section>
+  {{end}}
+
+  <section class="block" id="artists">
+    <header class="block-head">
+      <h2>Top artists</h2>
+      {{template "chart-controls" (dict "q" .RawQuery "prefix" "" "period" .TopArtistsPeriod "view" .TopArtistsView "limit" .TopArtistsLimit "anchor" "artists" "views" true)}}
+    </header>
     {{if .TopArtists}}
-    <div id="top-artists-display" class="top-artists-{{.TopArtistsView}}">
-      {{$view := .TopArtistsView}}
-      {{$artists := .TopArtists}}
-      {{$len := len $artists}}
-      {{if eq $view "grid"}}
-      <div class="artist-grid {{if mod $len 2}}artist-grid-odd{{end}}">
-        {{if mod $len 2}}
-        <div class="artist-cell-first">
-          <a href="/profile/{{$.Username}}/artist/{{urlquery (index $artists 0).Artist.Name}}" class="grid-items-cover-image">
-              <div class="grid-items-cover-image-image">
-                {{if (index $artists 0).Artist.ImageUrl}}
-                <img src="{{(index $artists 0).Artist.ImageUrl}}" alt="{{(index $artists 0).Artist.Name}}">
-                {{else}}
-                <div class="artist-placeholder"></div>
-                {{end}}
-              </div>
-            <div class="grid-items-item-details">
-              <p class="grid-items-item-main-text">{{(index $artists 0).Artist.Name}}</p>
-              <p class="grid-items-item-aux-text">{{formatInt (index $artists 0).ListenCount}} plays</p>
-            </div>
-          </a>
-        </div>
-        <div class="artist-right-col">
-          <div class="artist-row">
-            {{range $i, $a := slice $artists 1 (add 1 (div (sub $len 1) 2))}}
-            <div class="artist-cell">
-              <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="grid-items-cover-image">
-                <div class="grid-items-cover-image-image">
-                  {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder"></div>{{end}}
-                </div>
-                <div class="grid-items-item-details">
-                  <p class="grid-items-item-main-text">{{$a.Artist.Name}}</p>
-                  <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
-                </div>
-              </a>
-            </div>
-            {{end}}
-          </div>
-          <div class="artist-row">
-            {{range $i, $a := slice $artists (add 1 (div (sub $len 1) 2)) $len}}
-            <div class="artist-cell">
-              <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="grid-items-cover-image">
-                <div class="grid-items-cover-image-image">
-                  {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder"></div>{{end}}
-                </div>
-                <div class="grid-items-item-details">
-                  <p class="grid-items-item-main-text">{{$a.Artist.Name}}</p>
-                  <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
-                </div>
-              </a>
-            </div>
-            {{end}}
-          </div>
-        </div>
-        {{else}}
-        <div class="artist-row">
-          {{range $i, $a := slice $artists 0 (div $len 2)}}
-          <div class="artist-cell">
-            <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="grid-items-cover-image">
-              <div class="grid-items-cover-image-image">
-                {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder"></div>{{end}}
-              </div>
-              <div class="grid-items-item-details">
-                <p class="grid-items-item-main-text">{{$a.Artist.Name}}</p>
-                <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
-              </div>
-            </a>
-          </div>
-          {{end}}
-        </div>
-        <div class="artist-row">
-          {{range $i, $a := slice $artists (div $len 2) $len}}
-          <div class="artist-cell">
-            <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="grid-items-cover-image">
-              <div class="grid-items-cover-image-image">
-                {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder"></div>{{end}}
-              </div>
-              <div class="grid-items-item-details">
-                <p class="grid-items-item-main-text">{{$a.Artist.Name}}</p>
-                <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
-              </div>
-            </a>
-          </div>
-          {{end}}
-        </div>
-        {{end}}
-      </div>
-      {{else}}
-      <div class="artist-list">
-        {{range $a := $artists}}
-        <a href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}" class="artist-row">
-          {{if $a.Artist.ImageUrl}}<img src="{{$a.Artist.ImageUrl}}" alt="{{$a.Artist.Name}}">{{else}}<div class="artist-placeholder-row"></div>{{end}}
-          <span class="artist-name">{{$a.Artist.Name}}</span>
-          <span class="artist-count">{{formatInt $a.ListenCount}} plays</span>
+      {{$max := (index .TopArtists 0).ListenCount}}
+      {{if eq .TopArtistsView "grid"}}
+      <div class="mosaic">
+        {{range $i, $a := .TopArtists}}
+        <a class="tile" href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}">
+          <div class="tile-art" style="view-transition-name: {{artName "artist" $a.Artist.Id}}">{{template "art" (dict "url" $a.Artist.ImageUrl "name" $a.Artist.Name)}}</div>
+          <span class="tile-rank">{{rank $i}}</span>
+          <span class="tile-meta">
+            <span class="tile-name">{{$a.Artist.Name}}</span>
+            <span class="tile-sub">{{formatInt $a.ListenCount}} plays</span>
+          </span>
         </a>
         {{end}}
       </div>
+      {{else}}
+      <ol class="chart">
+        {{range $i, $a := .TopArtists}}
+        <li>
+          <a class="chart-row" style="--pct: {{pct $a.ListenCount $max}}%" href="/profile/{{$.Username}}/artist/{{urlquery $a.Artist.Name}}">
+            <span class="chart-rank">{{add $i 1}}</span>
+            <span class="thumb round" style="view-transition-name: {{artName "artist" $a.Artist.Id}}">{{template "art" (dict "url" $a.Artist.ImageUrl "name" $a.Artist.Name)}}</span>
+            <span class="chart-text"><span class="chart-name">{{$a.Artist.Name}}</span></span>
+            <span class="count">{{formatInt $a.ListenCount}}</span>
+          </a>
+        </li>
+        {{end}}
+      </ol>
       {{end}}
-    </div>
+    {{else}}
+    <p class="empty">No plays in this period.</p>
     {{end}}
-  </div>
-  <div class="top-albums">
-    <div class="top-albums-controls">
-      <h3>Top Albums</h3>
-      <div class="controls-row">
-        <label>
-          Period:
-          <select id="album-period-select" onchange="updateTopAlbums()">
-            <option value="all_time" {{if eq .TopAlbumsPeriod "all_time"}}selected{{end}}>All Time</option>
-            <option value="week" {{if eq .TopAlbumsPeriod "week"}}selected{{end}}>Last 7 Days</option>
-            <option value="month" {{if eq .TopAlbumsPeriod "month"}}selected{{end}}>Last 30 Days</option>
-            <option value="year" {{if eq .TopAlbumsPeriod "year"}}selected{{end}}>Last Year</option>
-            <option value="custom" {{if eq .TopAlbumsPeriod "custom"}}selected{{end}}>Custom</option>
-          </select>
-        </label>
-        <div id="album-custom-dates" style="display: {{if eq .TopAlbumsPeriod "custom"}}inline-block{{else}}none{{end}};">
-          <input type="date" id="album-start-date" onchange="updateTopAlbums()">
-          <input type="date" id="album-end-date" onchange="updateTopAlbums()">
-        </div>
-        <label>
-          Count:
-          <select id="album-limit-select" onchange="updateTopAlbums()">
-            <option value="5" {{if eq .TopAlbumsLimit 5}}selected{{end}}>5</option>
-            <option value="6" {{if eq .TopAlbumsLimit 6}}selected{{end}}>6</option>
-            <option value="7" {{if eq .TopAlbumsLimit 7}}selected{{end}}>7</option>
-            <option value="8" {{if eq .TopAlbumsLimit 8}}selected{{end}}>8</option>
-            <option value="9" {{if eq .TopAlbumsLimit 9}}selected{{end}}>9</option>
-            <option value="10" {{if eq .TopAlbumsLimit 10}}selected{{end}}>10</option>
-            <option value="15" {{if eq .TopAlbumsLimit 15}}selected{{end}}>15</option>
-            <option value="20" {{if eq .TopAlbumsLimit 20}}selected{{end}}>20</option>
-            <option value="25" {{if eq .TopAlbumsLimit 25}}selected{{end}}>25</option>
-            <option value="30" {{if eq .TopAlbumsLimit 30}}selected{{end}}>30</option>
-          </select>
-        </label>
-        <label>
-          View:
-          <select id="album-view-select" onchange="updateTopAlbumsLimitOptions(); updateTopAlbums()">
-            <option value="grid" {{if eq .TopAlbumsView "grid"}}selected{{end}}>Grid</option>
-            <option value="list" {{if eq .TopAlbumsView "list"}}selected{{end}}>List</option>
-          </select>
-        </label>
-      </div>
-    </div>
+  </section>
+
+  <section class="block" id="albums">
+    <header class="block-head">
+      <h2>Top albums</h2>
+      {{template "chart-controls" (dict "q" .RawQuery "prefix" "album_" "period" .TopAlbumsPeriod "view" .TopAlbumsView "limit" .TopAlbumsLimit "anchor" "albums" "views" true)}}
+    </header>
     {{if .TopAlbums}}
-    <div id="top-albums-display" class="top-albums-{{.TopAlbumsView}}">
-      {{$view := .TopAlbumsView}}
-      {{$albums := .TopAlbums}}
-      {{$len := len $albums}}
-      {{if eq $view "grid"}}
-      <div class="artist-grid {{if mod $len 2}}artist-grid-odd{{end}}">
-        {{if mod $len 2}}
-        <div class="artist-cell-first">
-          <a href="/profile/{{$.Username}}/album/{{urlquery (index $albums 0).Artist}}/{{urlquery (index $albums 0).AlbumName}}" class="grid-items-cover-image">
-              <div class="grid-items-cover-image-image">
-                {{if (index $albums 0).CoverUrl}}
-                <img src="{{(index $albums 0).CoverUrl}}" alt="{{(index $albums 0).AlbumName}}">
-                {{else}}
-                <div class="artist-placeholder"></div>
-                {{end}}
-              </div>
-            <div class="grid-items-item-details">
-              <p class="grid-items-item-main-text">{{(index $albums 0).AlbumName}}</p>
-              <p class="grid-items-item-aux-text">{{(index $albums 0).Artist}}</p>
-              <p class="grid-items-item-aux-text">{{formatInt (index $albums 0).ListenCount}} plays</p>
-            </div>
-          </a>
-        </div>
-        <div class="artist-right-col">
-          <div class="artist-row">
-            {{range $i, $a := sliceAlbum $albums 1 (add 1 (div (sub $len 1) 2))}}
-            <div class="artist-cell">
-              <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="grid-items-cover-image">
-                <div class="grid-items-cover-image-image">
-                  {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder"></div>{{end}}
-                </div>
-                <div class="grid-items-item-details">
-                  <p class="grid-items-item-main-text">{{$a.AlbumName}}</p>
-                  <p class="grid-items-item-aux-text">{{$a.Artist}}</p>
-                  <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
-                </div>
-              </a>
-            </div>
-            {{end}}
-          </div>
-          <div class="artist-row">
-            {{range $i, $a := sliceAlbum $albums (add 1 (div (sub $len 1) 2)) $len}}
-            <div class="artist-cell">
-              <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="grid-items-cover-image">
-                <div class="grid-items-cover-image-image">
-                  {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder"></div>{{end}}
-                </div>
-                <div class="grid-items-item-details">
-                  <p class="grid-items-item-main-text">{{$a.AlbumName}}</p>
-                  <p class="grid-items-item-aux-text">{{$a.Artist}}</p>
-                  <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
-                </div>
-              </a>
-            </div>
-            {{end}}
-          </div>
-        </div>
-        {{else}}
-        <div class="artist-row">
-          {{range $i, $a := sliceAlbum $albums 0 (div $len 2)}}
-          <div class="artist-cell">
-            <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="grid-items-cover-image">
-              <div class="grid-items-cover-image-image">
-                {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder"></div>{{end}}
-              </div>
-              <div class="grid-items-item-details">
-                <p class="grid-items-item-main-text">{{$a.AlbumName}}</p>
-                <p class="grid-items-item-aux-text">{{$a.Artist}}</p>
-                <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
-              </div>
-            </a>
-          </div>
-          {{end}}
-        </div>
-        <div class="artist-row">
-          {{range $i, $a := sliceAlbum $albums (div $len 2) $len}}
-          <div class="artist-cell">
-            <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="grid-items-cover-image">
-              <div class="grid-items-cover-image-image">
-                {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder"></div>{{end}}
-              </div>
-              <div class="grid-items-item-details">
-                <p class="grid-items-item-main-text">{{$a.AlbumName}}</p>
-                <p class="grid-items-item-aux-text">{{$a.Artist}}</p>
-                <p class="grid-items-item-aux-text">{{formatInt $a.ListenCount}} plays</p>
-              </div>
-            </a>
-          </div>
-          {{end}}
-        </div>
+      {{$max := (index .TopAlbums 0).ListenCount}}
+      {{if eq .TopAlbumsView "grid"}}
+      <div class="mosaic">
+        {{range $i, $a := .TopAlbums}}
+        <a class="tile" href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}">
+          <div class="tile-art" style="view-transition-name: {{artName "album" $a.Id}}">{{template "art" (dict "url" $a.CoverUrl "name" $a.AlbumName)}}</div>
+          <span class="tile-rank">{{rank $i}}</span>
+          <span class="tile-meta">
+            <span class="tile-name">{{$a.AlbumName}}</span>
+            <span class="tile-sub">{{$a.Artist}} · {{formatInt $a.ListenCount}} plays</span>
+          </span>
+        </a>
         {{end}}
       </div>
       {{else}}
-      <div class="artist-list">
-        {{range $a := $albums}}
-        <a href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}" class="artist-row">
-          {{if $a.CoverUrl}}<img src="{{$a.CoverUrl}}" alt="{{$a.AlbumName}}">{{else}}<div class="artist-placeholder-row"></div>{{end}}
-          <span class="artist-name">{{$a.AlbumName}} - {{$a.Artist}}</span>
-          <span class="artist-count">{{formatInt $a.ListenCount}} plays</span>
-        </a>
+      <ol class="chart">
+        {{range $i, $a := .TopAlbums}}
+        <li>
+          <a class="chart-row" style="--pct: {{pct $a.ListenCount $max}}%" href="/profile/{{$.Username}}/album/{{urlquery $a.Artist}}/{{urlquery $a.AlbumName}}">
+            <span class="chart-rank">{{add $i 1}}</span>
+            <span class="thumb" style="view-transition-name: {{artName "album" $a.Id}}">{{template "art" (dict "url" $a.CoverUrl "name" $a.AlbumName)}}</span>
+            <span class="chart-text"><span class="chart-name">{{$a.AlbumName}}</span><span class="chart-sub">{{$a.Artist}}</span></span>
+            <span class="count">{{formatInt $a.ListenCount}}</span>
+          </a>
+        </li>
         {{end}}
-      </div>
+      </ol>
       {{end}}
-    </div>
+    {{else}}
+    <p class="empty">No plays in this period.</p>
     {{end}}
-  </div>
-  <div class="top-tracks">
-    <div class="top-tracks-controls">
-      <h3>Top Tracks</h3>
-      <div class="controls-row">
-        <label>
-          Period:
-          <select id="track-period-select" onchange="updateTopTracks()">
-            <option value="all_time" {{if eq .TopTracksPeriod "all_time"}}selected{{end}}>All Time</option>
-            <option value="week" {{if eq .TopTracksPeriod "week"}}selected{{end}}>Last 7 Days</option>
-            <option value="month" {{if eq .TopTracksPeriod "month"}}selected{{end}}>Last 30 Days</option>
-            <option value="year" {{if eq .TopTracksPeriod "year"}}selected{{end}}>Last Year</option>
-            <option value="custom" {{if eq .TopTracksPeriod "custom"}}selected{{end}}>Custom</option>
-          </select>
-        </label>
-        <div id="track-custom-dates" style="display: {{if eq .TopTracksPeriod "custom"}}inline-block{{else}}none{{end}};">
-          <input type="date" id="track-start-date" onchange="updateTopTracks()">
-          <input type="date" id="track-end-date" onchange="updateTopTracks()">
-        </div>
-        <label>
-          Count:
-          <select id="track-limit-select" onchange="updateTopTracks()">
-            <option value="5" {{if eq .TopTracksLimit 5}}selected{{end}}>5</option>
-            <option value="6" {{if eq .TopTracksLimit 6}}selected{{end}}>6</option>
-            <option value="7" {{if eq .TopTracksLimit 7}}selected{{end}}>7</option>
-            <option value="8" {{if eq .TopTracksLimit 8}}selected{{end}}>8</option>
-            <option value="9" {{if eq .TopTracksLimit 9}}selected{{end}}>9</option>
-            <option value="10" {{if eq .TopTracksLimit 10}}selected{{end}}>10</option>
-            <option value="15" {{if eq .TopTracksLimit 15}}selected{{end}}>15</option>
-            <option value="20" {{if eq .TopTracksLimit 20}}selected{{end}}>20</option>
-            <option value="25" {{if eq .TopTracksLimit 25}}selected{{end}}>25</option>
-            <option value="30" {{if eq .TopTracksLimit 30}}selected{{end}}>30</option>
-          </select>
-        </label>
-      </div>
-    </div>
-    {{if .TopTracks}}
-    <div id="top-tracks-display">
-      {{$tracks := .TopTracks}}
-      <div class="artist-list">
-        {{range $t := $tracks}}
-        <a href="/profile/{{$.Username}}/song/{{urlquery $t.Artist}}/{{urlquery $t.SongName}}" class="artist-row">
-          <span class="artist-name">{{$t.SongName}} - {{$t.Artist}}</span>
-          <span class="artist-count">{{formatInt $t.ListenCount}} plays</span>
-        </a>
+  </section>
+
+  <div class="two-col">
+    <section class="block" id="tracks">
+      <header class="block-head">
+        <h2>Top tracks</h2>
+        {{template "chart-controls" (dict "q" .RawQuery "prefix" "track_" "period" .TopTracksPeriod "view" "list" "limit" .TopTracksLimit "anchor" "tracks" "views" false)}}
+      </header>
+      {{if .TopTracks}}
+      {{$max := (index .TopTracks 0).ListenCount}}
+      <ol class="chart">
+        {{range $i, $t := .TopTracks}}
+        <li>
+          <a class="chart-row" style="--pct: {{pct $t.ListenCount $max}}%" href="/profile/{{$.Username}}/song/{{urlquery $t.Artist}}/{{urlquery $t.SongName}}">
+            <span class="chart-rank">{{add $i 1}}</span>
+            <span class="thumb">{{template "art" (dict "url" $t.CoverUrl "name" $t.SongName)}}</span>
+            <span class="chart-text"><span class="chart-name">{{$t.SongName}}</span><span class="chart-sub">{{$t.Artist}}</span></span>
+            <span class="count">{{formatInt $t.ListenCount}}</span>
+          </a>
+        </li>
         {{end}}
-      </div>
-    </div>
-    {{end}}
-  </div>
-  <div class="history">
-    <h3>Listening History</h3>
-    <table>
-      <tr>
-        <th>Artist</th>
-        <th>Title</th>
-        <th>Timestamp</th>
-      </tr>
-      {{if .NowPlayingTitle}}
-      <tr>
-        <td>{{.NowPlayingArtist}}</td>
-        <td>{{.NowPlayingTitle}}</td>
-        <td>Now Playing</td>
-      </tr>
+      </ol>
+      {{else}}
+      <p class="empty">No plays in this period.</p>
       {{end}}
-      {{$artistIdsList := .ArtistIdsList}}
-      {{$times := .Times}}
-      {{$username := .Username}}
-      {{range $index, $title := .Titles}}
-      <tr>
-        <td>
-          {{- $artistIds := index $artistIdsList $index}}
-          {{- $artistNames := getArtistNames $artistIds}}
-          {{- range $i, $name := $artistNames}}{{if $i}}, {{end}}<a href="/profile/{{$username}}/artist/{{urlquery $name}}">{{$name}}</a>{{end}}
-        </td>
-        <td><a href="/profile/{{$username}}/song/{{urlquery (index $.Artists $index)}}/{{urlquery $title}}">{{$title}}</a></td>
-        <td><span title="{{formatTimestampFull (index $times $index)}}">{{formatTimestamp (index $times $index)}}</span></td>
-      </tr>
-      {{end}}
-    </table>
-  </div>
-  <div class="page_buttons">
-    {{if gt .Page 1 }}
-    <a href="/profile/{{.Username}}?page={{sub .Page 1}}">Prev Page</a>
-    {{end}}
-    <a href="/profile/{{.Username}}?page={{add .Page 1}}">Next Page</a>
+    </section>
+
+    <section class="block" id="recent">
+      <header class="block-head">
+        <h2>{{if gt .Page 1}}Earlier plays{{else}}Recently played{{end}}</h2>
+      </header>
+      {{template "feed" (dict "entries" .History "username" .Username "nowTitle" .NowPlayingTitle "nowArtist" .NowPlayingArtist)}}
+      <nav class="pager">
+        {{if gt .Page 1}}<a class="btn btn-small" href="/profile/{{.Username}}?page={{sub .Page 1}}#recent">← Newer</a>{{end}}
+        {{if .History}}<a class="btn btn-small" href="/profile/{{.Username}}?page={{add .Page 1}}#recent">Older →</a>{{end}}
+      </nav>
+    </section>
   </div>
 {{end}}

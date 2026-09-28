@@ -139,17 +139,39 @@ func waitForSpotify() error {
 	return nil
 }
 
+// Logs once per pause rather than once per request
 func pauseSpotify(retryAfter string) {
 	seconds, err := strconv.Atoi(retryAfter)
 	if err != nil || seconds <= 0 {
 		seconds = 5
 	}
+	until := time.Now().Add(time.Duration(seconds) * time.Second)
+
 	pauseMu.Lock()
-	if until := time.Now().Add(time.Duration(seconds) * time.Second); until.After(pausedUntil) {
+	wasPaused := time.Now().Before(pausedUntil)
+	if until.After(pausedUntil) {
 		pausedUntil = until
 	}
 	pauseMu.Unlock()
+
+	if !wasPaused {
+		fmt.Fprintf(os.Stderr, "Spotify rate limited image lookups; pausing Spotify for %v (Deezer is used meanwhile)\n",
+			time.Duration(seconds)*time.Second)
+	}
 }
+
+// Whether Spotify is in a rate-limit pause too long to wait out
+func spotifyPaused() bool {
+	pauseMu.Lock()
+	defer pauseMu.Unlock()
+	return time.Until(pausedUntil) > maxSpotifyWait
+}
+
+// Spotify's limits for development-mode apps are much lower than Deezer's, so its requests
+// get their own slower pace on top of the shared throttle
+const spotifyRequestInterval = 500 * time.Millisecond
+
+var spotifyTicker = time.NewTicker(spotifyRequestInterval)
 
 func spotifyGet(userId int, path string, out any) error {
 	for attempt := 0; attempt < 3; attempt++ {
@@ -160,7 +182,7 @@ func spotifyGet(userId int, path string, out any) error {
 		if err != nil {
 			return err
 		}
-		throttle()
+		<-spotifyTicker.C
 		req, err := http.NewRequest("GET", spotifyAPIURL+path, nil)
 		if err != nil {
 			return err

@@ -13,7 +13,6 @@ import (
 	"muzi/scrobble"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgtype"
 )
 
 type ProfileData struct {
@@ -24,10 +23,9 @@ type ProfileData struct {
 	ScrobbleCount       int
 	TrackCount          int
 	ArtistCount         int
-	Artists             []string
-	ArtistIdsList       [][]int
-	Titles              []string
-	Times               []time.Time
+	History             []db.ScrobbleEntry
+	Rhythm              *Rhythm
+	RawQuery            string
 	Page                int
 	Title               string
 	LoggedInUsername    string
@@ -45,6 +43,21 @@ type ProfileData struct {
 	TopTracks           []db.TopTrack
 	TopTracksPeriod     string
 	TopTracksLimit      int
+}
+
+// Chart sizes: grids are a 2x2 hero tile plus rows of four, so they fill evenly at 5, 9 or 13
+func chartLimit(view, raw string) int {
+	limit, err := strconv.Atoi(raw)
+	if view == "grid" {
+		if limit == 5 || limit == 9 || limit == 13 {
+			return limit
+		}
+		return 9
+	}
+	if err != nil || limit < 5 {
+		return 10
+	}
+	return min(limit, 30)
 }
 
 // Render a page of the profile in the URL
@@ -106,22 +119,7 @@ func profilePageHandler() http.HandlerFunc {
 			view = "grid"
 		}
 
-		maxLimit := 30
-		if view == "grid" {
-			maxLimit = 8
-		}
-
-		limitStr := r.URL.Query().Get("limit")
-		limit := 10
-		if limitStr != "" {
-			limit, err = strconv.Atoi(limitStr)
-			if err != nil || limit < 5 {
-				limit = 10
-			}
-			if limit > maxLimit {
-				limit = maxLimit
-			}
-		}
+		limit := chartLimit(view, r.URL.Query().Get("limit"))
 
 		profileData.TopArtistsPeriod = period
 		profileData.TopArtistsLimit = limit
@@ -195,29 +193,11 @@ func profilePageHandler() http.HandlerFunc {
 			}
 		}
 
-		albumLimitStr := r.URL.Query().Get("album_limit")
-		albumLimit := 10
-		if albumLimitStr != "" {
-			albumLimit, err = strconv.Atoi(albumLimitStr)
-			if err != nil || albumLimit < 5 {
-				albumLimit = 10
-			}
-			if albumLimit > 30 {
-				albumLimit = 30
-			}
-		}
-
 		albumView := r.URL.Query().Get("album_view")
 		if albumView == "" {
 			albumView = "grid"
 		}
-		albumMaxLimit := 30
-		if albumView == "grid" {
-			albumMaxLimit = 8
-		}
-		if albumLimit > albumMaxLimit {
-			albumLimit = albumMaxLimit
-		}
+		albumLimit := chartLimit(albumView, r.URL.Query().Get("album_limit"))
 
 		profileData.TopAlbumsPeriod = albumPeriod
 		profileData.TopAlbumsLimit = albumLimit
@@ -263,17 +243,7 @@ func profilePageHandler() http.HandlerFunc {
 			}
 		}
 
-		trackLimitStr := r.URL.Query().Get("track_limit")
-		trackLimit := 10
-		if trackLimitStr != "" {
-			trackLimit, err = strconv.Atoi(trackLimitStr)
-			if err != nil || trackLimit < 5 {
-				trackLimit = 10
-			}
-			if trackLimit > 30 {
-				trackLimit = 30
-			}
-		}
+		trackLimit := chartLimit("list", r.URL.Query().Get("track_limit"))
 
 		profileData.TopTracksPeriod = trackPeriod
 		profileData.TopTracksLimit = trackLimit
@@ -292,45 +262,16 @@ func profilePageHandler() http.HandlerFunc {
 			}
 		}
 
-		rows, err := db.Pool.Query(
-			r.Context(),
-			"SELECT artist_id, song_name, timestamp, artist_ids FROM history WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2 OFFSET $3;",
-			userId,
-			lim,
-			off,
-		)
+		profileData.History, err = db.GetHistory(userId, lim, off)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "SELECT history failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Cannot get history: %v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var artistId int
-			var title string
-			var time pgtype.Timestamptz
-			var artistIds []int
-			err = rows.Scan(&artistId, &title, &time, &artistIds)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Scanning history row failed: %v\n", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			var artistName string
-			if artistId > 0 {
-				artist, err := db.GetArtistById(artistId)
-				if err == nil {
-					artistName = artist.Name
-				}
-			}
-
-			profileData.Artists = append(profileData.Artists, artistName)
-			profileData.ArtistIdsList = append(profileData.ArtistIdsList, artistIds)
-			profileData.Titles = append(profileData.Titles, title)
-			profileData.Times = append(profileData.Times, time.Time)
+		if pageInt == 1 {
+			profileData.Rhythm = buildRhythm(userId)
 		}
+		profileData.RawQuery = r.URL.RawQuery
 
 		err = templates.ExecuteTemplate(w, "base", profileData)
 		if err != nil {

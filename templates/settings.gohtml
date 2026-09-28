@@ -1,144 +1,155 @@
 {{define "settings"}}
-  <div class="settings-container">
-    <h1>Settings</h1>
+  <div class="narrow">
+    <header class="page-title">
+      <div class="eyebrow">Settings</div>
+      <h1>Your library</h1>
+    </header>
 
-    <!-- Tab Navigation -->
-    <div class="settings-tabs">
-      <button class="tab-button active" data-tab="import">Import Data</button>
-      <button class="tab-button" data-tab="scrobble">Scrobble API</button>
+    <div class="tabs" role="tablist">
+      <button class="tab-button active" type="button" data-tab="profile" role="tab">Profile</button>
+      <button class="tab-button" type="button" data-tab="import" role="tab">Import</button>
+      <button class="tab-button" type="button" data-tab="scrobble" role="tab">Scrobbling</button>
     </div>
 
-    <!-- Tab Content -->
-    <div class="tab-content">
-      <!-- Import Data Tab -->
-      <div class="tab-panel active" id="import">
-        <div class="import-section">
-          <h2>Spotify</h2>
-          <p>Import your Spotify listening history from your data export.</p>
-          <form id="spotify-form" method="POST" action="/settings/import/spotify" enctype="multipart/form-data">
-            <input type="file" name="json_files" accept=".json,application/json" multiple required>
-            <button type="submit">Upload Spotify Data</button>
-          </form>
-
-          <div id="spotify-progress" class="progress-container" style="display: none;">
-            <div class="progress-status" id="spotify-progress-status">Initializing...</div>
-            <div class="progress-bar-wrapper">
-              <div class="progress-bar-fill" id="spotify-progress-fill"></div>
-              <div class="progress-text" id="spotify-progress-text">0%</div>
+    <div class="tab-panel active" id="profile">
+      <div class="card">
+        <h2>Profile picture</h2>
+        <p>JPEG, PNG, GIF or WebP, up to 5MB. Square images look best.</p>
+        {{if .PfpError}}<div class="login-error" style="margin-bottom: 14px">{{.PfpError}}</div>{{end}}
+        <form method="POST" action="/settings/update-pfp" enctype="multipart/form-data">
+          <div class="pfp-edit">
+            <div class="hero-art round pfp-preview">
+              <img id="pfpPreview" src="{{.Pfp}}" alt="Your profile picture">
             </div>
-            <div class="progress-tracks" id="spotify-progress-tracks"></div>
-            <div class="progress-error" id="spotify-progress-error"></div>
-            <div class="progress-success" id="spotify-progress-success"></div>
+            <div class="pfp-fields">
+              <input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp" required data-crop="cropper">
+              <div class="row">
+                <button type="submit" class="no-js-only">Save picture</button>
+                <button type="submit" formaction="/settings/update-pfp?remove=1" formnovalidate>Use default</button>
+              </div>
+            </div>
           </div>
-        </div>
+        </form>
+      </div>
 
-        <div class="import-section">
-          <h2>Last.fm</h2>
-          <p>Import your Last.fm scrobbles.</p>
-          <form id="lastfm-form" method="POST" action="/settings/import/lastfm">
-            <input type="text" name="lastfm_username" placeholder="Last.FM Username" required>
-            <input type="text" name="lastfm_api_key" placeholder="Last.FM API Key" required>
-            <button type="submit">Import from Last.fm</button>
-          </form>
-
-          <div id="lastfm-progress" class="progress-container" style="display: none;">
-            <div class="progress-status" id="lastfm-progress-status">Initializing...</div>
-            <div class="progress-bar-wrapper">
-              <div class="progress-bar-fill" id="lastfm-progress-fill"></div>
-              <div class="progress-text" id="lastfm-progress-text">0%</div>
-            </div>
-            <div class="progress-tracks" id="lastfm-progress-tracks"></div>
-            <div class="progress-error" id="lastfm-progress-error"></div>
-            <div class="progress-success" id="lastfm-progress-success"></div>
+      {{/* move-and-crop step shown after picking an image (JS); uploads a 512px square */}}
+      <div class="modal-overlay" id="cropper" hidden>
+        <div class="modal-content crop-dialog" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+          <h2 id="cropTitle">Move and crop</h2>
+          <div class="crop-stage" id="cropStage" tabindex="0" aria-label="Drag or use arrow keys to move, plus and minus to zoom">
+            <img id="cropImage" alt="" draggable="false">
+            <div class="crop-mask" aria-hidden="true"></div>
+          </div>
+          <label class="crop-zoom">
+            <span aria-hidden="true">−</span>
+            <input type="range" id="cropZoom" min="1" max="5" step="0.01" value="1" aria-label="Zoom">
+            <span aria-hidden="true">+</span>
+          </label>
+          <p class="modal-hint" id="cropError" role="alert"></p>
+          <div class="modal-buttons">
+            <button type="button" id="cropCancel" style="margin-left: auto">Cancel</button>
+            <button type="button" class="btn-primary" id="cropSave">Save picture</button>
           </div>
         </div>
       </div>
 
-      <!-- Scrobble API Tab -->
-      <div class="tab-panel" id="scrobble">
-        <div class="import-section">
-          <h2>API Keys</h2>
-          <p>Generate an API key to receive scrobbles from external apps.</p>
-          {{if .APIKey}}
-            <div class="api-key-display">
-              <label>API Key:</label>
-              <code>{{.APIKey}}</code>
-            </div>
-            <div class="api-key-display">
-              <label>API Secret:</label>
-              <code>{{.APISecret}}</code>
-            </div>
-          {{end}}
-          <form method="POST" action="/settings/generate-apikey">
-            <button type="submit">{{if .APIKey}}Regenerate{{else}}Generate{{end}} API Key</button>
-          </form>
-        </div>
+      <div class="card">
+        <h2>Bio</h2>
+        <p>A line or two about your taste. Shown under your name on your profile; leave it empty to hide it.</p>
+        <form method="POST" action="/settings/update-bio">
+          <textarea name="bio" maxlength="{{.BioMaxLength}}" placeholder="Currently stuck on…" aria-label="Bio">{{.Bio}}</textarea>
+          <div><button type="submit">Save bio</button></div>
+        </form>
+      </div>
+    </div>
 
-        <div class="import-section">
-          <h2>Endpoint URLs</h2>
-          <p>Use these URLs in your scrobbling apps:</p>
-          <div class="api-key-display">
-            <label>Last.fm Compatible:</label>
-            <code>/2.0/</code>
+    <div class="tab-panel" id="import">
+      <div class="card">
+        <h2>Last.fm</h2>
+        <p>Bring in your scrobble history. Running it again only adds plays that are missing.</p>
+        <form id="lastfm-form" method="POST" action="/settings/import/lastfm">
+          <div class="row">
+            <input type="text" name="lastfm_username" placeholder="Last.fm username" required style="flex: 1 1 180px">
+            <input type="text" name="lastfm_api_key" placeholder="Last.fm API key" required style="flex: 2 1 240px">
           </div>
-          <div class="api-key-display">
-            <label>Listenbrainz JSON:</label>
-            <code>/1/submit-listens</code>
+          <div><button type="submit">Import from Last.fm</button></div>
+        </form>
+        {{template "progress" "lastfm"}}
+      </div>
+
+      <div class="card">
+        <h2>Spotify</h2>
+        <p>Upload the JSON files from your Spotify data export (up to 30 at a time).</p>
+        <form id="spotify-form" method="POST" action="/settings/import/spotify" enctype="multipart/form-data">
+          <input type="file" name="json_files" accept=".json,application/json" multiple required>
+          <div><button type="submit">Upload Spotify data</button></div>
+        </form>
+        {{template "progress" "spotify"}}
+      </div>
+    </div>
+
+    <div class="tab-panel" id="scrobble">
+      <div class="card">
+        <h2>API key</h2>
+        <p>Scrobbling apps authenticate with these.</p>
+        {{if .APIKey}}
+        <dl class="kv">
+          <dt>API key</dt><dd><code>{{.APIKey}}</code></dd>
+          <dt>API secret</dt><dd><code>{{.APISecret}}</code></dd>
+        </dl>
+        {{end}}
+        <form method="POST" action="/settings/generate-apikey">
+          <div><button type="submit">{{if .APIKey}}Regenerate{{else}}Generate{{end}} API key</button></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Endpoints</h2>
+        <p>Point your scrobbler at one of these paths on this server.</p>
+        <dl class="kv">
+          <dt>Last.fm compatible</dt><dd><code>/2.0/</code></dd>
+          <dt>ListenBrainz</dt><dd><code>/1/submit-listens</code></dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <h2>Spotify</h2>
+        <p>Create an app at <a class="ok" href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com</a>, add this redirect URI to it, then save its credentials here.</p>
+        <dl class="kv">
+          <dt>Redirect URI</dt><dd><code>{{.SpotifyRedirectURI}}</code></dd>
+        </dl>
+        <form method="POST" action="/settings/update-spotify">
+          <div class="row">
+            <input type="text" name="spotify_client_id" placeholder="Client ID" value="{{.SpotifyClientId}}" style="flex: 1 1 200px">
+            <input type="password" name="spotify_client_secret" placeholder="Client secret" style="flex: 1 1 200px">
           </div>
-        </div>
-
-        <div class="import-section">
-          <h2>Spotify Integration</h2>
-          <p>Connect your Spotify account to automatically import your listening history.</p>
-          <p>Create a Spotify app at <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a> and enter your credentials below.</p>
-          <p>In the app's settings, add this exact Redirect URI: <code>{{.SpotifyRedirectURI}}</code></p>
-          <p class="info">Saving credentials is enough for artist and album images; connecting is only needed to scrobble your Spotify playback.</p>
-          
-          <form method="POST" action="/settings/update-spotify">
-            <input type="text" name="spotify_client_id" placeholder="Spotify Client ID" value="{{.SpotifyClientId}}">
-            <input type="password" name="spotify_client_secret" placeholder="Spotify Client Secret">
-            <button type="submit">Save Spotify Credentials</button>
-          </form>
-
-          {{if and .SpotifyClientId (not .SpotifyConnected)}}
-            <p><a href="/settings/spotify-connect" class="button">Connect Spotify</a></p>
-            <p class="info">Click to authorize Muzi to access your Spotify account.</p>
-          {{end}}
-
-          {{if .SpotifyConnected}}
-            <p class="success">Spotify is connected and importing!</p>
-          {{end}}
-        </div>
+          <div class="row">
+            <button type="submit">Save credentials</button>
+            {{if and .SpotifyClientId (not .SpotifyConnected)}}
+            <a class="btn" href="/settings/spotify-connect">Connect Spotify</a>
+            {{end}}
+          </div>
+        </form>
+        {{if .SpotifyConnected}}
+        <p class="ok" style="margin: 14px 0 0">● Connected — your Spotify plays are being scrobbled.</p>
+        {{end}}
+        <p class="note" style="margin: 14px 0 0">Credentials alone are enough for artist and album images. Connecting is only needed to scrobble your Spotify playback.</p>
       </div>
     </div>
   </div>
-  
-  <script src="/files/import.js"></script>
-  <script>
-    function switchToTab(tabName, updateUrl = true) {
-      document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      
-      document.querySelector(`.tab-button[data-tab="${tabName}"]`).classList.add('active');
-      document.getElementById(tabName).classList.add('active');
-      
-      if (updateUrl) {
-        const url = new URL(window.location);
-        url.searchParams.set('tab', tabName);
-        history.pushState({}, '', url);
-      }
-    }
 
-    document.querySelectorAll('.tab-button').forEach(button => {
-      button.addEventListener('click', () => {
-        switchToTab(button.dataset.tab);
-      });
-    });
+  <script src="/files/import.js" defer></script>
+{{end}}
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get('tab');
-    if (tabParam) {
-      switchToTab(tabParam, false);
-    }
-  </script>
+{{define "progress"}}
+<div id="{{.}}-progress" class="progress-container" style="display: none;">
+  <div class="progress-status" id="{{.}}-progress-status">Initializing…</div>
+  <div class="progress-bar-wrapper">
+    <div class="progress-bar-fill" id="{{.}}-progress-fill"></div>
+    <div class="progress-text" id="{{.}}-progress-text">0%</div>
+  </div>
+  <div class="progress-tracks" id="{{.}}-progress-tracks"></div>
+  <div class="progress-error" id="{{.}}-progress-error"></div>
+  <div class="progress-success" id="{{.}}-progress-success"></div>
+</div>
 {{end}}

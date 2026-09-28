@@ -3,8 +3,12 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
+	"unicode/utf8"
 
+	"muzi/db"
 	"muzi/scrobble"
 )
 
@@ -17,7 +21,15 @@ type settingsData struct {
 	SpotifyClientId    string
 	SpotifyConnected   bool
 	SpotifyRedirectURI string
+	Pfp                string
+	PfpError           string
+	Bio                string
+	BioMaxLength       int
 }
+
+const bioMaxLength = 500
+
+const defaultPfp = "/files/assets/pfps/default.png"
 
 func settingsPageHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +60,10 @@ func settingsPageHandler() http.HandlerFunc {
 			SpotifyClientId:    "",
 			SpotifyConnected:   user.IsSpotifyConnected(),
 			SpotifyRedirectURI: scrobble.SpotifyRedirectURI(r),
+			Pfp:                user.Pfp,
+			PfpError:           r.URL.Query().Get("pfp_error"),
+			Bio:                user.Bio,
+			BioMaxLength:       bioMaxLength,
 		}
 
 		if user.ApiKey != nil {
@@ -166,4 +182,68 @@ func spotifyConnectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/scrobble/spotify/authorize?user_id=%d", userId), http.StatusSeeOther)
+}
+
+// Sets the logged-in user's profile picture from an upload, or back to the default
+// when the "remove" button was used
+func updateProfilePictureHandler(w http.ResponseWriter, r *http.Request) {
+	username := getLoggedInUsername(r)
+	if username == "" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	userId, err := getUserIdByUsername(r.Context(), username)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+
+	pfp := defaultPfp
+	if r.URL.Query().Get("remove") == "" {
+		pfp, err = saveUploadedImage(r)
+		if err != nil {
+			http.Redirect(w, r, "/settings?tab=profile&pfp_error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+	}
+
+	_, err = db.Pool.Exec(r.Context(), "UPDATE users SET pfp = $1 WHERE pk = $2", pfp, userId)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error updating profile picture: %v\n", err)
+		http.Error(w, "Error saving profile picture", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/settings?tab=profile", http.StatusSeeOther)
+}
+
+// Sets the logged-in user's bio; an empty bio hides it on the profile
+func updateBioHandler(w http.ResponseWriter, r *http.Request) {
+	username := getLoggedInUsername(r)
+	if username == "" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	userId, err := getUserIdByUsername(r.Context(), username)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+
+	bio := strings.TrimSpace(strings.ReplaceAll(r.FormValue("bio"), "\r\n", "\n"))
+	if utf8.RuneCountInString(bio) > bioMaxLength {
+		http.Error(w, fmt.Sprintf("Bio must be %d characters or fewer", bioMaxLength), http.StatusBadRequest)
+		return
+	}
+
+	_, err = db.Pool.Exec(r.Context(), "UPDATE users SET bio = $1 WHERE pk = $2", bio, userId)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error updating bio: %v\n", err)
+		http.Error(w, "Error saving bio", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/settings?tab=profile", http.StatusSeeOther)
 }
