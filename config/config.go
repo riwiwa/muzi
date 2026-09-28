@@ -11,6 +11,12 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	Images   ImagesConfig
+	Storage  StorageConfig
+}
+
+type StorageConfig struct {
+	// Where uploaded images are saved; relative paths are relative to the working directory
+	UploadsDir string `toml:"uploads_dir"`
 }
 
 type ServerConfig struct {
@@ -38,6 +44,14 @@ type DatabaseConfig struct {
 
 var cfg *Config
 
+// The config file to read; set with SetPath before LoadConfig
+var path = "config.toml"
+
+// Sets which config file LoadConfig reads (muzi's -config flag)
+func SetPath(p string) {
+	path = p
+}
+
 func LoadConfig() (*Config, error) {
 	cfg = &Config{
 		Server: ServerConfig{
@@ -53,12 +67,15 @@ func LoadConfig() (*Config, error) {
 		Images: ImagesConfig{
 			AutoFetch: true,
 		},
+		Storage: StorageConfig{
+			UploadsDir: "static/uploads",
+		},
 	}
 
-	if _, err := os.Stat("config.toml"); err == nil {
-		_, err := toml.DecodeFile("config.toml", cfg)
+	if _, err := os.Stat(path); err == nil {
+		_, err := toml.DecodeFile(path, cfg)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing config.toml: %w", err)
+			return nil, fmt.Errorf("error parsing %s: %w", path, err)
 		}
 	}
 

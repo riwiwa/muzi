@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 
@@ -22,11 +23,18 @@ func check(msg string, err error) {
 }
 
 func main() {
+	configPath := flag.String("config", "config.toml", "path to the config file")
+	flag.Parse()
+	config.SetPath(*configPath)
+
 	_, err := config.LoadConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
+
+	templateFiles, staticFiles := assetFS()
+	check("loading templates", web.Init(templateFiles, staticFiles))
 
 	check("ensuring muzi DB exists", db.CreateDB())
 
