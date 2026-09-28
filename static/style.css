@@ -836,6 +836,20 @@ code {
 }
 .crop-zoom input { flex: 1; accent-color: var(--accent); }
 
+/* destructive settings */
+.card.danger { border-color: rgba(255, 143, 128, 0.35); }
+.card.danger h2 { color: var(--danger); }
+.btn-danger-solid, button[type="submit"].btn-danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #2a0c08;
+}
+.btn-danger-solid:hover, button[type="submit"].btn-danger-solid:hover {
+  background: #ffaa9e;
+  border-color: #ffaa9e;
+  color: #2a0c08;
+}
+
 /* import progress */
 .progress-container { margin-top: 16px; }
 .progress-status { font-size: 13px; color: var(--muted); margin-bottom: 8px; }

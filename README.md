@@ -46,6 +46,16 @@ muzi creates its database and tables on first start. The web UI runs on port 123
 
 muzi reads `config.toml`, `templates/` and `static/` from its working directory, so run it from the repository folder.
 
+### Resetting a password
+
+If someone is locked out, run this from the muzi folder:
+
+```sh
+muzi reset-password <username>   # or: go run main.go reset-password <username>
+```
+
+It prints a new random password and logs that user out everywhere. Users can change their own password under **Settings → Account**.
+
 ## Configuration
 
 `config.toml` (all fields optional; these are the defaults):
