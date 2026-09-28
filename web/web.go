@@ -149,6 +149,7 @@ func Start() {
 	r.Handle("/2.0", scrobble.NewLastFMHandler())
 	r.Handle("/2.0/", scrobble.NewLastFMHandler())
 	r.Post("/1/submit-listens", http.HandlerFunc(scrobble.NewListenbrainzHandler().ServeHTTP))
+	r.Get("/1/validate-token", scrobble.ValidateListenbrainzToken)
 	r.Route("/scrobble/spotify", func(r chi.Router) {
 		r.Get("/authorize", http.HandlerFunc(scrobble.NewSpotifyHandler().ServeHTTP))
 		r.Get("/callback", http.HandlerFunc(scrobble.NewSpotifyHandler().ServeHTTP))
