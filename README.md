@@ -15,7 +15,7 @@
 - **Search:** press `/` or `Ctrl+K` anywhere to search your library and other people's public profiles.
 - **Editing:** rename artists, albums and tracks, add plays by hand, and select any number of plays to fix their title, artist or album, or delete them, in one go. Multi-artist tracks are split into their artists.
 - **Profile customization:** upload and crop a profile picture, write a bio, and choose whether your profile is public. Profiles are private until you share them.
-- **Mobile:** the UI works on phones as well as desktop.
+- **Web-UI:** UI that works on all devices with compatible web browsers.
 
 ## Screenshots
 
@@ -146,19 +146,3 @@ For **Spotify**:
 3. Save the app's client ID and secret in muzi, then click **Connect Spotify**.
 
 The credentials alone are enough for Spotify artwork; connecting is only needed to scrobble your Spotify playback.
-
-## Roadmap:
-- Ability to import all listening statistics and scrobbles from: \[In Progress\]
-    - LastFM \[Complete\]
-    - Spotify \[Complete\]
-    - Apple Music \[Complete\]
-
-- WebUI \[In Progress\]
-    - Full listening history with time \[Complete\]
-    - Daily, weekly, monthly, yearly, lifetime presets for listening reports \[In Progress\]
-    - Ability to specify a certain point in time from one datetime to another to list data \[In Progress\]
-    - Grid maker (3x3-10x10) \[Complete\]
-    - Ability to change artist and album images \[Complete\]
-- Multi artist scrobbling \[Complete\]
-- Live scrobbling to the server (With Now playing status) \[Complete\]
-- Batch scrobble editor
