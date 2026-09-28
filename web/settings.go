@@ -27,6 +27,8 @@ type settingsData struct {
 	BioMaxLength       int
 	PublicProfile      bool
 	ProfileURL         string
+	AccountError       string
+	AccountOK          string
 }
 
 const bioMaxLength = 500
@@ -67,6 +69,8 @@ func settingsPageHandler() http.HandlerFunc {
 			Bio:                user.Bio,
 			BioMaxLength:       bioMaxLength,
 			ProfileURL:         "/profile/" + username,
+			AccountError:       r.URL.Query().Get("account_error"),
+			AccountOK:          r.URL.Query().Get("account_ok"),
 		}
 
 		err = db.Pool.QueryRow(r.Context(), "SELECT public_profile FROM users WHERE pk = $1", userId).

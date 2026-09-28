@@ -56,13 +56,13 @@ var dummyPasswordHash = func() string {
 	return string(h)
 }()
 
-// Handles the submission of new account credentials. Stores credentials in
-// the users table. Sets a browser cookie for successful new users.
 // Signup is open for the first account, then only if the config allows it
 func signupOpen(r *http.Request) bool {
 	return config.Get().Server.AllowSignup || !hasUsers(r.Context())
 }
 
+// Handles the submission of new account credentials. Stores credentials in
+// the users table. Sets a browser cookie for successful new users.
 func createAccount(w http.ResponseWriter, r *http.Request) {
 	if !signupOpen(r) {
 		http.Error(w, "Signup is closed on this server", http.StatusForbidden)

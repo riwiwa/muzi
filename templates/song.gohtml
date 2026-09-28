@@ -21,19 +21,14 @@
       {{if $owner}}
       <div class="hero-actions">
         <button class="btn btn-small" type="button" onclick="openEditModal()">Edit</button>
-        <button class="btn btn-small" type="button" id="removeScrobblesBtn" onclick="toggleRemoveMode()">Remove plays</button>
-        <span id="removeControls" style="display: none;">
-          <button class="btn btn-small" type="button" onclick="cancelRemoveMode()">Cancel</button>
-          <button class="btn btn-small btn-danger" type="button" onclick="deleteSelectedScrobbles()">Delete selected</button>
-        </span>
       </div>
       {{end}}
     </div>
   </section>
 
   <section class="block" id="plays">
-    <header class="block-head"><h2>Plays</h2></header>
-    {{template "feed" (dict "entries" .Times "username" .Username "cover" .ImageUrl "checks" $owner)}}
+    <header class="block-head"><h2>Plays</h2>{{if $owner}}<button class="btn btn-small" type="button" data-select-toggle>Select</button>{{end}}</header>
+    {{template "feed" (dict "entries" .Times "username" .Username "cover" .ImageUrl "select" $owner)}}
     <nav class="pager">
       {{if gt .Page 1}}<a class="btn btn-small" href="/profile/{{.Username}}/song/{{urlquery .Artist.Name}}/{{urlquery .Song.Title}}?page={{sub .Page 1}}#plays">← Newer</a>{{end}}
       {{if .Times}}<a class="btn btn-small" href="/profile/{{.Username}}/song/{{urlquery .Artist.Name}}/{{urlquery .Song.Title}}?page={{add .Page 1}}#plays">Older →</a>{{end}}

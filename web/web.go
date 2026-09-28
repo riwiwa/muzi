@@ -93,10 +93,15 @@ func Start() {
 	addr := config.Get().Server.Address
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(csrfMiddleware)
 	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(http.Dir("./static"))))
 	r.Get("/", rootHandler())
 	r.Get("/login", loginPageHandler())
-	r.Get("/logout", logoutHandler())
+	r.Post("/logout", logoutHandler())
+	// logging out is a POST so other sites can't do it with a link; old links just go home
+	r.Get("/logout", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
 	r.Get("/createaccount", createAccountPageHandler())
 	r.Get("/profile/{username}", profilePageHandler())
 	r.Get("/profile/{username}/artist/{artist}", artistPageHandler())
@@ -133,6 +138,7 @@ func Start() {
 	r.Patch("/api/song/{id}/batch", songBatchEditHandler())
 	r.Patch("/api/album/{id}/batch", albumBatchEditHandler())
 	r.Post("/api/scrobble/delete", deleteScrobbleHandler())
+	r.Post("/api/scrobble/edit", editScrobblesHandler())
 	r.Post("/api/upload/image", imageUploadHandler())
 	r.Get("/search", searchHandler())
 	r.Get("/import", importPageHandler())
@@ -149,6 +155,7 @@ func Start() {
 	r.Handle("/2.0", scrobble.NewLastFMHandler())
 	r.Handle("/2.0/", scrobble.NewLastFMHandler())
 	r.Post("/1/submit-listens", http.HandlerFunc(scrobble.NewListenbrainzHandler().ServeHTTP))
+	r.Get("/1/validate-token", scrobble.ValidateListenbrainzToken)
 	r.Route("/scrobble/spotify", func(r chi.Router) {
 		r.Get("/authorize", http.HandlerFunc(scrobble.NewSpotifyHandler().ServeHTTP))
 		r.Get("/callback", http.HandlerFunc(scrobble.NewSpotifyHandler().ServeHTTP))
@@ -161,6 +168,8 @@ func Start() {
 	r.Post("/settings/update-pfp", updateProfilePictureHandler)
 	r.Post("/settings/update-bio", updateBioHandler)
 	r.Post("/settings/update-visibility", updateVisibilityHandler)
+	r.Post("/settings/change-password", changePasswordHandler)
+	r.Post("/settings/delete-account", deleteAccountHandler)
 	fmt.Printf("WebUI starting on %s\n", addr)
 	prot := http.NewCrossOriginProtection()
 	http.ListenAndServe(addr, prot.Handler(r))

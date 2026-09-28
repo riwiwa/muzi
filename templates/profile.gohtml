@@ -172,10 +172,12 @@
     </section>
 
     <section class="block" id="recent">
+      {{$owner := eq .LoggedInUsername .Username}}
       <header class="block-head">
         <h2>{{if gt .Page 1}}Earlier plays{{else}}Recently played{{end}}</h2>
+        {{if $owner}}<button class="btn btn-small" type="button" data-select-toggle>Select</button>{{end}}
       </header>
-      {{template "feed" (dict "entries" .History "username" .Username "nowTitle" .NowPlayingTitle "nowArtist" .NowPlayingArtist)}}
+      {{template "feed" (dict "entries" .History "username" .Username "nowTitle" .NowPlayingTitle "nowArtist" .NowPlayingArtist "select" $owner)}}
       <nav class="pager">
         {{if gt .Page 1}}<a class="btn btn-small" href="/profile/{{.Username}}?page={{sub .Page 1}}#recent">← Newer</a>{{end}}
         {{if .History}}<a class="btn btn-small" href="/profile/{{.Username}}?page={{add .Page 1}}#recent">Older →</a>{{end}}
