@@ -47,7 +47,7 @@ type ProfileData struct {
 
 // Start/end bounds for a chart period ("week", "month", "year", "custom" with YYYY-MM-DD dates,
 // anything else is all time). The custom end date is inclusive.
-func periodRange(period, startStr, endStr string) (startDate, endDate *time.Time) {
+func periodRange(period, startStr, endStr string, loc *time.Location) (startDate, endDate *time.Time) {
 	now := time.Now()
 	switch period {
 	case "week":
@@ -60,10 +60,10 @@ func periodRange(period, startStr, endStr string) (startDate, endDate *time.Time
 		start := now.AddDate(-1, 0, 0)
 		startDate = &start
 	case "custom":
-		if t, err := time.Parse("2006-01-02", startStr); err == nil {
+		if t, err := time.ParseInLocation("2006-01-02", startStr, loc); err == nil {
 			startDate = &t
 		}
-		if t, err := time.Parse("2006-01-02", endStr); err == nil {
+		if t, err := time.ParseInLocation("2006-01-02", endStr, loc); err == nil {
 			t = t.AddDate(0, 0, 1)
 			endDate = &t
 		}
@@ -155,7 +155,8 @@ func profilePageHandler() http.HandlerFunc {
 		profileData.TopArtistsLimit = limit
 		profileData.TopArtistsView = view
 
-		startDate, endDate := periodRange(period, r.URL.Query().Get("start"), r.URL.Query().Get("end"))
+		loc, tz := userLocation(userId)
+		startDate, endDate := periodRange(period, r.URL.Query().Get("start"), r.URL.Query().Get("end"), loc)
 
 		topArtists, err := db.GetTopArtists(userId, limit, startDate, endDate)
 		if err != nil {
@@ -169,7 +170,7 @@ func profilePageHandler() http.HandlerFunc {
 			albumPeriod = "all_time"
 		}
 
-		albumStartDate, albumEndDate := periodRange(albumPeriod, r.URL.Query().Get("album_start"), r.URL.Query().Get("album_end"))
+		albumStartDate, albumEndDate := periodRange(albumPeriod, r.URL.Query().Get("album_start"), r.URL.Query().Get("album_end"), loc)
 
 		albumView := r.URL.Query().Get("album_view")
 		if albumView == "" {
@@ -193,7 +194,7 @@ func profilePageHandler() http.HandlerFunc {
 			trackPeriod = "all_time"
 		}
 
-		trackStartDate, trackEndDate := periodRange(trackPeriod, r.URL.Query().Get("track_start"), r.URL.Query().Get("track_end"))
+		trackStartDate, trackEndDate := periodRange(trackPeriod, r.URL.Query().Get("track_start"), r.URL.Query().Get("track_end"), loc)
 
 		trackLimit := chartLimit("list", r.URL.Query().Get("track_limit"))
 
@@ -220,8 +221,9 @@ func profilePageHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		profileData.History = inLocation(profileData.History, loc)
 		if pageInt == 1 {
-			profileData.Rhythm = buildRhythm(userId)
+			profileData.Rhythm = buildRhythm(userId, loc, tz)
 		}
 		profileData.RawQuery = r.URL.RawQuery
 

@@ -161,6 +161,7 @@ func Start() {
 	r.Post("/settings/update-pfp", updateProfilePictureHandler)
 	r.Post("/settings/update-bio", updateBioHandler)
 	r.Post("/settings/update-visibility", updateVisibilityHandler)
+	r.Post("/settings/update-timezone", updateTimezoneHandler)
 	fmt.Printf("WebUI starting on %s\n", addr)
 	prot := http.NewCrossOriginProtection()
 	http.ListenAndServe(addr, prot.Handler(r))

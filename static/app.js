@@ -617,6 +617,30 @@
     });
   }
 
+  // ---------- timezone picker: suggest IANA names and offer the browser's zone ----------
+
+  var tzInput = $('#timezoneInput');
+  if (tzInput) {
+    var list = $('#timezones');
+    if (Intl.supportedValuesOf) {
+      Intl.supportedValuesOf('timeZone').forEach(function (zone) {
+        var opt = document.createElement('option');
+        opt.value = zone;
+        list.appendChild(opt);
+      });
+    }
+    var detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var detectBtn = $('#detectTimezone');
+    if (detected && detected !== tzInput.value) {
+      detectBtn.textContent = 'Use ' + detected;
+      detectBtn.hidden = false;
+      detectBtn.addEventListener('click', function () {
+        tzInput.value = detected;
+        tzInput.form.requestSubmit ? tzInput.form.requestSubmit() : tzInput.form.submit();
+      });
+    }
+  }
+
   // ---------- settings tabs ----------
 
   var tabs = $$('.tab-button');

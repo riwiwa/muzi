@@ -79,7 +79,8 @@ func gridPageHandler() http.HandlerFunc {
 			d.Sizes = append(d.Sizes, n)
 		}
 
-		start, end := periodRange(d.Period, q.Get("start"), q.Get("end"))
+		loc, _ := userLocation(userId)
+		start, end := periodRange(d.Period, q.Get("start"), q.Get("end"), loc)
 		limit := d.Size * d.Size
 		if d.Kind == "artists" {
 			artists, err := db.GetTopArtists(userId, limit, start, end)
