@@ -12,6 +12,7 @@
       <div class="wordmark">muzi</div>
       <p>Welcome back. Your records missed you.</p>
       {{if eq .Error "invalid-creds"}}<div class="login-error">Invalid username or password.</div>{{end}}
+      {{if eq .Error "too-many"}}<div class="login-error">Too many failed attempts. Try again in {{.Minutes}} minute{{if ne .Minutes "1"}}s{{end}}.</div>{{end}}
       {{if eq .Error "session"}}<div class="login-error">Unable to create a session. Please try again.</div>{{end}}
       {{if eq .Error "signup-closed"}}<div class="login-error">Signup is closed on this server.</div>{{end}}
       <form action="/loginsubmit" method="POST">

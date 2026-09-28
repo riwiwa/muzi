@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 
 	"muzi/config"
 	"muzi/db"
+	"muzi/ratelimit"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -42,13 +44,17 @@ func hashPassword(pass []byte) (string, error) {
 // Compares a plaintext password and a hashed password. Returns T/F depending
 // on comparison result.
 func verifyPassword(hashedPassword string, enteredPassword []byte) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), enteredPassword)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error while comparing passwords: %v\n", err)
-		return false
-	}
-	return true
+	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), enteredPassword) == nil
 }
+
+// A valid bcrypt hash (of a random password) that no login can match. Used for unknown
+// usernames so failed logins take the same time whether or not the account exists.
+var dummyPasswordHash = func() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	h, _ := bcrypt.GenerateFromPassword(b, bcrypt.DefaultCost)
+	return string(h)
+}()
 
 // Signup is open for the first account, then only if the config allows it
 func signupOpen(r *http.Request) bool {
@@ -152,15 +158,26 @@ func loginSubmit(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/login?error=invalid-creds", http.StatusSeeOther)
 			return
 		}
+
+		keys := ratelimit.LoginKeys(r, username)
+		if locked, wait := ratelimit.Logins.Blocked(keys); locked {
+			minutes := int(wait.Minutes()) + 1
+			w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+			http.Redirect(w, r, "/login?error=too-many&minutes="+strconv.Itoa(minutes), http.StatusSeeOther)
+			return
+		}
+
 		password := r.FormValue("pass")
 		var storedPassword string
 		err = db.Pool.QueryRow(r.Context(), "SELECT password FROM users WHERE username = $1;", username).
 			Scan(&storedPassword)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Cannot get password for entered username: %v\n", err)
+			// compare against a real hash anyway, so unknown usernames take as long as known ones
+			storedPassword = dummyPasswordHash
 		}
 
-		if verifyPassword(storedPassword, []byte(password)) {
+		if verifyPassword(storedPassword, []byte(password)) && storedPassword != dummyPasswordHash {
+			ratelimit.Logins.Succeed(keys)
 			sessionID := createSession(username)
 			if sessionID == "" {
 				http.Redirect(w, r, "/login?error=session", http.StatusSeeOther)
@@ -177,6 +194,7 @@ func loginSubmit(w http.ResponseWriter, r *http.Request) {
 			})
 			http.Redirect(w, r, "/profile/"+username, http.StatusSeeOther)
 		} else {
+			ratelimit.Logins.Fail(keys)
 			http.Redirect(w, r, "/login?error=invalid-creds", http.StatusSeeOther)
 		}
 	}
@@ -187,9 +205,14 @@ func loginPageHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		type data struct {
 			Error      string
+			Minutes    string
 			SignupOpen bool
 		}
-		d := data{Error: r.URL.Query().Get("error"), SignupOpen: signupOpen(r)}
+		d := data{
+			Error:      r.URL.Query().Get("error"),
+			Minutes:    r.URL.Query().Get("minutes"),
+			SignupOpen: signupOpen(r),
+		}
 		err := templates.ExecuteTemplate(w, "login.gohtml", d)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
