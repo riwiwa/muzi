@@ -18,6 +18,9 @@ import (
 	_ "time/tzdata"
 )
 
+// Set at build time for releases: -ldflags "-X main.version=v1.0.0"
+var version = "dev"
+
 func check(msg string, err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error %s: %v\n", msg, err)
@@ -27,7 +30,12 @@ func check(msg string, err error) {
 
 func main() {
 	configPath := flag.String("config", "config.toml", "path to the config file")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("muzi", version)
+		return
+	}
 	config.SetPath(*configPath)
 
 	_, err := config.LoadConfig()

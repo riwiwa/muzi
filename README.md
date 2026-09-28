@@ -36,6 +36,14 @@
 
 ## Getting started
 
+### From a release
+
+Download the archive for your system from the [releases page](https://github.com/riwiwa/muzi/releases), unpack it, and run `./muzi` (with PostgreSQL running). Copy `config.example.toml` to `config.toml` to change settings. `muzi -version` shows which release you have.
+
+Prebuilt Docker images are published too: `ghcr.io/riwiwa/muzi:latest`, or a specific version such as `ghcr.io/riwiwa/muzi:1.0`.
+
+### From source
+
 ```sh
 git clone https://github.com/riwiwa/muzi.git
 cd muzi
