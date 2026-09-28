@@ -263,29 +263,88 @@
     });
   });
 
-  // ---------- removing plays (song page) ----------
+  // ---------- selecting plays to edit or delete (owner only) ----------
 
-  window.toggleRemoveMode = function () {
-    document.body.classList.add('removing');
-    $('#removeScrobblesBtn').style.display = 'none';
-    $('#removeControls').style.display = 'contents';
-  };
+  var selectBar = $('#selectBar');
+  if (selectBar) {
+    var boxes = $$('.scrobble-checkbox');
+    var batchModal = $('#batchEditModal');
+    var batchForm = $('#batchEditForm');
 
-  window.cancelRemoveMode = function () {
-    document.body.classList.remove('removing');
-    $('#removeScrobblesBtn').style.display = '';
-    $('#removeControls').style.display = 'none';
-    $$('.scrobble-checkbox').forEach(function (cb) { cb.checked = false; });
-  };
+    function selectedIds() {
+      return boxes.filter(function (cb) { return cb.checked; }).map(function (cb) { return parseInt(cb.value, 10); });
+    }
+    function plays(n) { return n + ' play' + (n === 1 ? '' : 's'); }
+    function updateSelection() {
+      var n = selectedIds().length;
+      $('#selectCount').textContent = n + ' selected';
+      $('#selectEdit').disabled = n === 0;
+      $('#selectDelete').disabled = n === 0;
+    }
+    function setSelecting(on) {
+      document.body.classList.toggle('selecting', on);
+      selectBar.hidden = !on;
+      $$('[data-select-toggle]').forEach(function (b) {
+        if (!selectBar.contains(b)) b.textContent = on ? 'Done' : 'Select';
+      });
+      if (!on) boxes.forEach(function (cb) { cb.checked = false; });
+      updateSelection();
+    }
 
-  window.deleteSelectedScrobbles = function () {
-    var ids = $$('.scrobble-checkbox:checked').map(function (cb) { return parseInt(cb.value, 10); });
-    if (!ids.length) { alert('Select at least one play to delete.'); return; }
-    if (!confirm('Delete ' + ids.length + ' play' + (ids.length === 1 ? '' : 's') + '? This cannot be undone.')) return;
-    request('POST', '/api/scrobble/delete', ids)
-      .then(function () { window.location.reload(); })
-      .catch(function (err) { alert('Could not delete: ' + err.message); });
-  };
+    $$('[data-select-toggle]').forEach(function (b) {
+      b.addEventListener('click', function () { setSelecting(!document.body.classList.contains('selecting')); });
+    });
+    boxes.forEach(function (cb) { cb.addEventListener('change', updateSelection); });
+    $('#selectAll').addEventListener('click', function () {
+      var all = boxes.every(function (cb) { return cb.checked; });
+      boxes.forEach(function (cb) { cb.checked = !all; });
+      updateSelection();
+    });
+
+    $('#selectDelete').addEventListener('click', function () {
+      var ids = selectedIds();
+      if (!ids.length || !confirm('Delete ' + plays(ids.length) + '? This cannot be undone.')) return;
+      request('POST', '/api/scrobble/delete', ids)
+        .then(function () { window.location.reload(); })
+        .catch(function (err) { alert('Could not delete: ' + err.message); });
+    });
+
+    $('#selectEdit').addEventListener('click', function () {
+      batchForm.reset();
+      $('#batchEditError').textContent = '';
+      $('#batchEditCount').textContent = plays(selectedIds().length);
+      batchModal.style.display = 'flex';
+      batchForm.elements.song_name.focus();
+    });
+    function closeBatch() { batchModal.style.display = 'none'; }
+    $('#batchEditCancel').addEventListener('click', closeBatch);
+    batchModal.addEventListener('mousedown', function (e) { if (e.target === batchModal) closeBatch(); });
+    batchModal.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeBatch(); });
+    batchForm.elements.clear_album.addEventListener('change', function () {
+      batchForm.elements.album_name.disabled = this.checked;
+    });
+
+    batchForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = { ids: selectedIds() };
+      ['song_name', 'artist', 'album_name'].forEach(function (name) {
+        var value = batchForm.elements[name].value.trim();
+        if (value && !batchForm.elements[name].disabled) body[name] = value;
+      });
+      if (batchForm.elements.clear_album.checked) body.album_name = '';
+      if (Object.keys(body).length === 1) {
+        $('#batchEditError').textContent = 'Fill in at least one field.';
+        return;
+      }
+      request('POST', '/api/scrobble/edit', body)
+        .then(function (res) { return res.json(); })
+        .then(function (r) {
+          if (r.skipped) alert(plays(r.updated) + ' updated. ' + plays(r.skipped) + ' skipped because they would duplicate an existing play.');
+          window.location.reload();
+        })
+        .catch(function (err) { $('#batchEditError').textContent = 'Could not save: ' + err.message; });
+    });
+  }
 
   // ---------- custom date ranges on profile charts ----------
 
