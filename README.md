@@ -1,11 +1,106 @@
-# Muzi
-## Self-hosted music listening statistics
+# muzi
 
-### Requirements
+**Self-hosted music listening statistics.** Import your history from Last.fm and Spotify, scrobble live from your players, and browse it all in a fast, lightweight web UI. It's server-rendered Go with no frontend framework.
+
+![Profile with listening stats, a year heatmap, a listening clock and top artists](docs/screenshots/profile.jpg)
+
+## Features
+
+- **Imports:** your full history from Last.fm (via the API) and Spotify (from your data export). Re-running an import only adds what's missing.
+- **Live scrobbling:** Last.fm-compatible and ListenBrainz-compatible endpoints, plus Spotify playback polling. Players show up as **now playing**.
+- **Profile:** top artists, albums and tracks for any period, including custom date ranges, shown as a mosaic or a ranked chart.
+- **Rhythm:** a year-long heatmap of daily plays, a 24-hour listening clock, and listening streaks.
+- **Artwork:** artist, album and track images are fetched automatically from Spotify (if you add credentials) or Deezer. Upload your own to override any of them.
+- **Search:** press `/` or `Ctrl+K` anywhere to search your library.
+- **Editing:** rename artists, albums and tracks, remove scrobbles, and add plays by hand. Multi-artist tracks are split into their artists.
+- **Profile customization:** upload and crop a profile picture, and write a bio.
+- **Mobile:** the UI works on phones as well as desktop.
+
+## Screenshots
+
+| Artist | Album |
+|---|---|
+| ![Artist page](docs/screenshots/artist.jpg) | ![Album page](docs/screenshots/album.jpg) |
+
+![Top albums, top tracks and recently played](docs/screenshots/charts.jpg)
+
+<p align="center"><img src="docs/screenshots/mobile.jpg" alt="muzi on a phone" width="560"></p>
+
+## Requirements
+
 - Go 1.25+
 - PostgreSQL
 
-### Roadmap:
+## Getting started
+
+```sh
+git clone https://github.com/riwiwa/muzi.git
+cd muzi
+go run main.go
+```
+
+muzi creates its database and tables on first start. The web UI runs on port 1234 by default. Open http://localhost:1234 and create an account.
+
+muzi reads `config.toml`, `templates/` and `static/` from its working directory, so run it from the repository folder.
+
+## Configuration
+
+`config.toml` (all fields optional; these are the defaults):
+
+```toml
+[server]
+address = "0.0.0.0:1234"
+# Public URL, if muzi is behind a reverse proxy; used for the Spotify redirect URI
+# public_url = "https://muzi.example.com"
+
+[database]
+host = "localhost"
+port = "5432"
+user = "postgres"
+password = "postgres"
+name = "muzi"
+
+[images]
+# Fetch missing artist/album/track images automatically
+auto_fetch = true
+```
+
+## Importing your history
+
+Under **Settings → Import**:
+
+- **Last.fm:** your Last.fm username and an [API key](https://www.last.fm/api/account/create).
+- **Spotify:** the `Streaming_History_Audio_*.json` files from your [Spotify data export](https://www.spotify.com/account/privacy/). Request the **Extended streaming history** export; the basic account-data export doesn't include full play history.
+
+## Scrobbling
+
+Generate an API key under **Settings → Scrobbling**, then point your scrobbler at one of these endpoints:
+
+| Protocol | Endpoint |
+|---|---|
+| ListenBrainz | `http://<host>:1234/1/submit-listens` (API key as the token) |
+| Last.fm compatible | `http://<host>:1234/2.0/` |
+
+For **MPD**, [listenbrainz-mpd](https://codeberg.org/elomatreb/listenbrainz-mpd) works out of the box:
+
+```toml
+# ~/.config/listenbrainz-mpd/config.toml
+[submission]
+token = "<your muzi API key>"
+api_url = "http://127.0.0.1:1234"
+
+[mpd]
+address = "127.0.0.1:6600"
+```
+
+For **Spotify**:
+1. Create an app at [developer.spotify.com](https://developer.spotify.com/dashboard).
+2. Add the redirect URI shown under **Settings → Scrobbling** to the app.
+3. Save the app's client ID and secret in muzi, then click **Connect Spotify**.
+
+The credentials alone are enough for Spotify artwork; connecting is only needed to scrobble your Spotify playback.
+
+## Roadmap:
 - Ability to import all listening statistics and scrobbles from: \[In Progress\]
     - LastFM \[Complete\]
     - Spotify \[Complete\]
