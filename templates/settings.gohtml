@@ -7,6 +7,7 @@
 
     <div class="tabs" role="tablist">
       <button class="tab-button active" type="button" data-tab="profile" role="tab">Profile</button>
+      <button class="tab-button" type="button" data-tab="account" role="tab">Account</button>
       <button class="tab-button" type="button" data-tab="import" role="tab">Import</button>
       <button class="tab-button" type="button" data-tab="scrobble" role="tab">Scrobbling</button>
     </div>
@@ -72,6 +73,32 @@
         <form method="POST" action="/settings/update-bio">
           <textarea name="bio" maxlength="{{.BioMaxLength}}" placeholder="Currently stuck on…" aria-label="Bio">{{.Bio}}</textarea>
           <div><button type="submit">Save bio</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="account">
+      {{if .AccountError}}<div class="login-error" style="margin-top: 16px">{{.AccountError}}</div>{{end}}
+      {{if .AccountOK}}<div class="message success">{{.AccountOK}}</div>{{end}}
+
+      <div class="card">
+        <h2>Password</h2>
+        <p>Changing it logs you out everywhere else.</p>
+        <form method="POST" action="/settings/change-password">
+          <label>Current password <input type="password" name="current_password" autocomplete="current-password" required></label>
+          <label>New password <input type="password" name="new_password" autocomplete="new-password" minlength="8" maxlength="64" required></label>
+          <label>Confirm new password <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" maxlength="64" required></label>
+          <div><button type="submit">Change password</button></div>
+        </form>
+      </div>
+
+      <div class="card danger">
+        <h2>Delete account</h2>
+        <p>Permanently deletes your account and all of its listening history, artists, albums and settings. This can't be undone.</p>
+        <form method="POST" action="/settings/delete-account">
+          <label><span>Type <b>{{.LoggedInUsername}}</b> to confirm</span> <input type="text" name="confirm_username" autocomplete="off" spellcheck="false" required></label>
+          <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+          <div><button type="submit" class="btn-danger-solid">Delete my account</button></div>
         </form>
       </div>
     </div>

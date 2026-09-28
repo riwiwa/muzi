@@ -36,6 +36,19 @@ func main() {
 
 	check("ensuring all tables exist", db.CreateAllTables())
 	check("running migrations", db.RunMigrations())
+
+	// `muzi reset-password <username>` sets a new random password and exits
+	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "usage: muzi reset-password <username>")
+			os.Exit(2)
+		}
+		password, err := web.ResetPassword(os.Args[2])
+		check("resetting password", err)
+		fmt.Printf("New password for %s: %s\nAll of their sessions have been logged out.\n", os.Args[2], password)
+		return
+	}
+
 	check("creating albums and songs for imported history", db.BackfillEntities())
 	check("cleaning expired sessions", db.CleanupExpiredSessions())
 	scrobble.StartSpotifyPoller()

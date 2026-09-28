@@ -193,3 +193,22 @@ func ParseTimestamp(ts interface{}) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("unknown timestamp type")
 	}
 }
+
+// GET /1/validate-token, which many ListenBrainz clients call when you set them up. Like
+// ListenBrainz, it answers 200 either way and says in the body whether the token is valid.
+func ValidateListenbrainzToken(w http.ResponseWriter, r *http.Request) {
+	token := stripBearer(r.Header.Get("Authorization"))
+	if token == "" {
+		token = r.URL.Query().Get("token")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, username, err := GetUserByAPIKey(token)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"code": 200, "message": "Token invalid.", "valid": false})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"code": 200, "message": "Token valid.", "valid": true, "user_name": username,
+	})
+}

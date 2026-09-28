@@ -830,7 +830,7 @@ func GetHistory(userId, limit, offset int) ([]ScrobbleEntry, error) {
 
 func GetHistoryForArtist(userId, artistId int, limit, offset int) ([]ScrobbleEntry, error) {
 	rows, err := Pool.Query(context.Background(),
-		`SELECT h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
+		`SELECT h.id, h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
 			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name,
 			h.artist_ids, COALESCE(s.image_url, al.cover_url, '')
 		FROM history h
@@ -847,7 +847,7 @@ func GetHistoryForArtist(userId, artistId int, limit, offset int) ([]ScrobbleEnt
 	var entries []ScrobbleEntry
 	for rows.Next() {
 		var e ScrobbleEntry
-		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName,
+		err := rows.Scan(&e.Id, &e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName,
 			&e.ArtistIds, &e.CoverUrl)
 		if err != nil {
 			return nil, err
@@ -1008,7 +1008,7 @@ func GetAlbumStats(userId, albumId int) (int, error) {
 
 func GetHistoryForAlbum(userId, albumId int, limit, offset int) ([]ScrobbleEntry, error) {
 	rows, err := Pool.Query(context.Background(),
-		`SELECT h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
+		`SELECT h.id, h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
 			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name,
 			h.artist_ids
 		FROM history h
@@ -1024,7 +1024,7 @@ func GetHistoryForAlbum(userId, albumId int, limit, offset int) ([]ScrobbleEntry
 	var entries []ScrobbleEntry
 	for rows.Next() {
 		var e ScrobbleEntry
-		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName, &e.ArtistIds)
+		err := rows.Scan(&e.Id, &e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName, &e.ArtistIds)
 		if err != nil {
 			return nil, err
 		}
