@@ -367,8 +367,10 @@
   // date-and-time pickers need a time for
   var query = new URLSearchParams(window.location.search);
   $$('.range-form').forEach(function (form) {
+    // the server passes the effective settings, which include saved ones the URL doesn't show
+    var settings = form.dataset.query !== undefined ? new URLSearchParams(form.dataset.query) : query;
     ['start', 'end'].forEach(function (key) {
-      var value = query.get(form.dataset.prefix + key);
+      var value = settings.get(form.dataset.prefix + key);
       if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) value += key === 'start' ? 'T00:00' : 'T23:59';
       if (value) form.elements[key].value = value;
     });

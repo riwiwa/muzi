@@ -307,6 +307,7 @@ func AddImageColumns() error {
 // polling and image lookups, and kept across restarts.
 // public_profile: whether others can see the user's profile and find them in search.
 // timezone: IANA zone the user's stats are grouped in; NULL means the server's local time.
+// profile_prefs: the user's remembered profile chart choices (period, view, size per section).
 func AddUserColumns() error {
 	_, err := Pool.Exec(
 		context.Background(),
@@ -314,6 +315,7 @@ func AddUserColumns() error {
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS spotify_paused_until TIMESTAMPTZ;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS public_profile BOOLEAN NOT NULL DEFAULT FALSE;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_prefs JSONB NOT NULL DEFAULT '{}'::jsonb;
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_lastfm_session_key ON users(lastfm_session_key);`,
 	)
 	if err != nil {
