@@ -3,6 +3,7 @@ package artwork
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -76,5 +77,35 @@ func TestLookupPrefersSpotify(t *testing.T) {
 	)
 	if r.source != "deezer" || r.spotifyChecked {
 		t.Errorf("unexpected no-spotify result %+v", r)
+	}
+}
+
+func TestLongSpotifyPauseSkipsRequests(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+	}))
+	defer srv.Close()
+
+	oldURL := spotifyAPIURL
+	spotifyAPIURL = srv.URL
+	defer func() { spotifyAPIURL = oldURL }()
+	tokens[1] = appToken{accessToken: "test-token", expiresAt: time.Now().Add(time.Hour)}
+	defer delete(tokens, 1)
+
+	pauseSpotify("3600")
+	defer func() { pausedUntil = time.Time{} }()
+
+	if !spotifyPaused() {
+		t.Fatal("expected Spotify to be paused")
+	}
+	if _, _, err := spotifyArtistImage(1, "", "anyone"); err != errSpotifyLimited {
+		t.Errorf("got err %v, want errSpotifyLimited", err)
+	}
+	if calls.Load() != 0 {
+		t.Errorf("made %d requests while paused", calls.Load())
+	}
+	if cond := artistColumns.pendingCondition(); strings.Contains(cond, "spotify_client_id") {
+		t.Errorf("upgrades should be skipped while paused, got condition: %s", cond)
 	}
 }

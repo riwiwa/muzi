@@ -1022,29 +1022,93 @@ code {
 
 /* ---------- responsive ---------- */
 
+/* Narrow screens only; desktop layout is untouched above 860px.
+   Single-column grids use minmax(0, 1fr): a plain 1fr track grows to its widest content
+   (the year heatmap, date inputs, long names) and pushes the page off screen. */
 @media (max-width: 860px) {
-  .rhythm { grid-template-columns: 1fr; }
+  .rhythm { grid-template-columns: minmax(0, 1fr); }
   .clock { max-width: 200px; }
-  .two-col { grid-template-columns: 1fr; }
-  .scrobble-row { grid-template-columns: 1fr 1fr; }
+  .two-col { grid-template-columns: minmax(0, 1fr); }
+  .scrobble-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scrobble-row input[name="song_name"] { grid-column: span 2; }
+  .scrobble-row input { min-width: 0; }
 }
 
 @media (max-width: 640px) {
+  :root { --gutter: 16px; }
+
+  /* safety net: nothing inside the page can cause sideways scrolling */
+  main { overflow-x: clip; }
+
+  .topbar { gap: 6px; padding-top: 10px; padding-bottom: 10px; }
+  .wordmark { font-size: 24px; }
   .search-trigger span, .search-trigger kbd { display: none; }
   .search-trigger { flex: none; padding: 9px; }
-  .topbar { gap: 8px; }
-  .hero { grid-template-columns: 1fr; align-items: start; }
-  .mosaic { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .chart-row { grid-template-columns: 30px 40px minmax(0, 1fr) auto; gap: 10px; }
+  .topnav { gap: 0; }
+
+  .hero { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 18px; padding-top: 28px; }
+  .hero h1 { font-size: clamp(32px, 11vw, 44px); }
+  .hero-sub { font-size: 15px; }
+  .stats { gap: 12px 24px; margin-top: 18px; }
+  .stat b { font-size: 28px; }
+  .hero-actions { flex-wrap: wrap; }
+
+  .block { margin-top: 40px; }
+  .block-head { position: relative; flex-direction: column; align-items: stretch; gap: 12px; }
+  .block-head h2 { font-size: 26px; }
+  .chips { gap: 8px; }
+  .chip { padding: 6px 10px; }
+
+  /* the custom range popup spans the header instead of hanging off the chip's edge */
+  .range { position: static; }
+  .range-form { left: 0; right: 0; top: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .range-form button { grid-column: span 2; }
+
+  .mosaic { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tile-meta { padding: 10px; }
+  .tile:first-child .tile-meta { padding: 14px 16px; }
+  .tile:first-child .tile-rank { top: 12px; left: 14px; font-size: 34px; }
+
+  .chart-row { grid-template-columns: 26px 40px minmax(0, 1fr) auto; gap: 10px; padding-right: 8px; }
   .chart-rank { font-size: 20px; }
   .thumb { width: 40px; height: 40px; }
-  .feed-row { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; }
+
+  .rhythm-stats { gap: 12px 22px; }
+  .rhythm-stats .stat b { font-size: 22px; }
+
+  .feed-row { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; padding: 7px 4px; }
   .removing .feed-row { grid-template-columns: 20px 40px minmax(0, 1fr) auto; }
   .feed-day { top: 57px; }
-  .block-head h2 { font-size: 26px; }
-  .kv { grid-template-columns: 1fr; }
+
+  .card { padding: 18px; }
+  .card .row > * { flex-basis: 100% !important; }
+  .kv { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .kv dd { margin-bottom: 10px; }
+  .tabs { display: flex; }
+  .tabs button { flex: 1; padding: 7px 8px; }
+  .pfp-edit { justify-content: center; }
+
+  .scrobble-row { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .scrobble-actions { flex-wrap: wrap; }
+  .scrobble-actions button { flex: 1; }
+
+  .palette { padding-top: 8vh; }
+  .palette-results a { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
+  .palette-results .type { grid-column: 1 / -1; }
+  .palette-hint { display: none; }
+
+  .modal-content { padding: 20px; }
   .modal-buttons { flex-wrap: wrap; }
+  .modal-buttons .reset-image-btn { flex-basis: 100%; }
+
+  /* iOS zooms the page when focusing inputs under 16px */
+  input[type="text"], input[type="password"], input[type="number"], input[type="date"],
+  input[type="time"], textarea, select { font-size: 16px; }
+}
+
+@media (max-width: 360px) {
+  .topnav a { width: 32px; }
+  .count { font-size: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

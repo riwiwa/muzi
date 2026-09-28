@@ -75,7 +75,7 @@ func lookup(spotifyFn func() (string, string, error), deezerFn func() (string, e
 		r.imageUrl, r.source = imageUrl, "spotify"
 		return r, nil
 	}
-	if err != nil && !errors.Is(err, errNoSpotify) {
+	if err != nil && !errors.Is(err, errNoSpotify) && !errors.Is(err, errSpotifyLimited) {
 		fmt.Fprintf(os.Stderr, "Spotify image lookup failed, trying Deezer: %v\n", err)
 	}
 
@@ -101,14 +101,20 @@ var (
 )
 
 // Rows to look up: no image yet (retrying misses after retryAfter), or a non-Spotify image that can be
-// upgraded now that the user has Spotify credentials. Custom and Spotify images are left alone.
+// upgraded now that the user has Spotify credentials. Upgrades are skipped while Spotify is rate
+// limiting us, since they'd only repeat the Deezer lookup. Custom and Spotify images are left alone.
 // Expects the entity aliased as e and its user as u.
 func (c imageColumns) pendingCondition() string {
+	upgrades := "FALSE"
+	if !spotifyPaused() {
+		upgrades = fmt.Sprintf(`NOT e.%[1]s AND NULLIF(u.spotify_client_id, '') IS NOT NULL
+				AND NULLIF(u.spotify_client_secret, '') IS NOT NULL AND e.%[2]s < now() - interval '1 hour'`,
+			c.spotifyChecked, c.fetchedAt)
+	}
 	return fmt.Sprintf(`e.%[2]s IS DISTINCT FROM 'custom' AND e.%[2]s IS DISTINCT FROM 'spotify' AND (
-			(e.%[1]s IS NULL AND (e.%[3]s IS NULL OR e.%[3]s < now() - %[5]s))
-			OR (NOT e.%[4]s AND NULLIF(u.spotify_client_id, '') IS NOT NULL
-				AND NULLIF(u.spotify_client_secret, '') IS NOT NULL AND e.%[3]s < now() - interval '1 hour')
-		)`, c.url, c.source, c.fetchedAt, c.spotifyChecked, retryAfter)
+			(e.%[1]s IS NULL AND (e.%[3]s IS NULL OR e.%[3]s < now() - %[4]s))
+			OR (%[5]s)
+		)`, c.url, c.source, c.fetchedAt, retryAfter, upgrades)
 }
 
 // Saves a lookup result. An empty result keeps any existing (e.g. Deezer) image rather than clearing it,
