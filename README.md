@@ -44,7 +44,12 @@ go run main.go
 
 muzi creates its database and tables on first start. The web UI runs on port 1234 by default. Open http://localhost:1234 and create an account. After the first account exists, signup is closed unless you set `allow_signup = true`.
 
-muzi reads `config.toml`, `templates/` and `static/` from its working directory, so run it from the repository folder.
+Templates and static files are built into the binary, so muzi runs from anywhere:
+
+```sh
+go build -o muzi .
+./muzi -config /etc/muzi/config.toml   # defaults to ./config.toml
+```
 
 ### Resetting a password
 
@@ -78,6 +83,10 @@ name = "muzi"
 [images]
 # Fetch missing artist/album/track images automatically
 auto_fetch = true
+
+[storage]
+# Where uploaded images are saved (relative paths are relative to the working directory)
+uploads_dir = "static/uploads"
 ```
 
 ## Importing your history

@@ -1122,7 +1122,7 @@ func saveUploadedImage(r *http.Request) (string, error) {
 	}
 	filename := hex.EncodeToString(hash.Sum(nil)) + ext
 
-	uploadDir := "./static/uploads"
+	uploadDir := config.Get().Storage.UploadsDir
 	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating upload dir: %v\n", err)
 		return "", fmt.Errorf("server error")

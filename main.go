@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 
@@ -22,11 +23,18 @@ func check(msg string, err error) {
 }
 
 func main() {
+	configPath := flag.String("config", "config.toml", "path to the config file")
+	flag.Parse()
+	config.SetPath(*configPath)
+
 	_, err := config.LoadConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
+
+	templateFiles, staticFiles := assetFS()
+	check("loading templates", web.Init(templateFiles, staticFiles))
 
 	check("ensuring muzi DB exists", db.CreateDB())
 
@@ -37,14 +45,15 @@ func main() {
 	check("ensuring all tables exist", db.CreateAllTables())
 
 	// `muzi reset-password <username>` sets a new random password and exits
-	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
-		if len(os.Args) != 3 {
+	// arguments after flags, so this works alongside -config
+	if args := flag.Args(); len(args) > 0 && args[0] == "reset-password" {
+		if len(args) != 2 {
 			fmt.Fprintln(os.Stderr, "usage: muzi reset-password <username>")
 			os.Exit(2)
 		}
-		password, err := web.ResetPassword(os.Args[2])
+		password, err := web.ResetPassword(args[1])
 		check("resetting password", err)
-		fmt.Printf("New password for %s: %s\nAll of their sessions have been logged out.\n", os.Args[2], password)
+		fmt.Printf("New password for %s: %s\nAll of their sessions have been logged out.\n", args[1], password)
 		return
 	}
 
