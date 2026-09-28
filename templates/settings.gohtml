@@ -68,6 +68,24 @@
       </div>
 
       <div class="card">
+        <h2>Timezone</h2>
+        <p>Days in your history, heatmap, listening clock and streaks follow this timezone.</p>
+        {{if .TimezoneError}}<div class="login-error" style="margin-bottom: 14px">{{.TimezoneError}}</div>{{end}}
+        <form method="POST" action="/settings/update-timezone">
+          <label>Timezone
+            <input type="text" name="timezone" value="{{.Timezone}}" list="timezones" placeholder="Server default"
+              autocomplete="off" spellcheck="false" id="timezoneInput">
+          </label>
+          <datalist id="timezones"></datalist>
+          <div class="row">
+            <button type="submit">Save timezone</button>
+            <button type="button" id="detectTimezone" hidden>Use this device's timezone</button>
+          </div>
+          <p class="note" style="margin: 0">Leave it empty to use the server's timezone.</p>
+        </form>
+      </div>
+
+      <div class="card">
         <h2>Bio</h2>
         <p>A line or two about your taste. Shown under your name on your profile; leave it empty to hide it.</p>
         <form method="POST" action="/settings/update-bio">

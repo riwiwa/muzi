@@ -47,9 +47,13 @@ type ProfileData struct {
 
 // Start/end bounds for a chart period ("week", "month", "year", "custom" with YYYY-MM-DD dates,
 // anything else is all time). The custom end date is inclusive.
-func periodRange(period, startStr, endStr string) (startDate, endDate *time.Time) {
+func periodRange(period, startStr, endStr string, loc *time.Location) (startDate, endDate *time.Time) {
 	now := time.Now()
 	switch period {
+	case "day":
+		// since midnight in the profile owner's timezone
+		start := startOfDay(now.In(loc))
+		startDate = &start
 	case "week":
 		start := now.AddDate(0, 0, -7)
 		startDate = &start
@@ -60,15 +64,30 @@ func periodRange(period, startStr, endStr string) (startDate, endDate *time.Time
 		start := now.AddDate(-1, 0, 0)
 		startDate = &start
 	case "custom":
-		if t, err := time.Parse("2006-01-02", startStr); err == nil {
+		if t, _, ok := parseRangeTime(startStr, loc); ok {
 			startDate = &t
 		}
-		if t, err := time.Parse("2006-01-02", endStr); err == nil {
-			t = t.AddDate(0, 0, 1)
+		if t, dateOnly, ok := parseRangeTime(endStr, loc); ok {
+			if dateOnly {
+				// a bare end date includes that whole day
+				t = t.AddDate(0, 0, 1)
+			}
 			endDate = &t
 		}
 	}
 	return startDate, endDate
+}
+
+// Parses a custom range bound: a date and time from the range picker ("2006-01-02T15:04"),
+// or a bare date as older links use. dateOnly says which it was.
+func parseRangeTime(s string, loc *time.Location) (t time.Time, dateOnly bool, ok bool) {
+	if t, err := time.ParseInLocation("2006-01-02T15:04", s, loc); err == nil {
+		return t, false, true
+	}
+	if t, err := time.ParseInLocation("2006-01-02", s, loc); err == nil {
+		return t, true, true
+	}
+	return time.Time{}, false, false
 }
 
 // Chart sizes: grids are a 2x2 hero tile plus rows of four, so they fill evenly at 5, 9 or 13
@@ -155,7 +174,8 @@ func profilePageHandler() http.HandlerFunc {
 		profileData.TopArtistsLimit = limit
 		profileData.TopArtistsView = view
 
-		startDate, endDate := periodRange(period, r.URL.Query().Get("start"), r.URL.Query().Get("end"))
+		loc, tz := userLocation(userId)
+		startDate, endDate := periodRange(period, r.URL.Query().Get("start"), r.URL.Query().Get("end"), loc)
 
 		topArtists, err := db.GetTopArtists(userId, limit, startDate, endDate)
 		if err != nil {
@@ -169,7 +189,7 @@ func profilePageHandler() http.HandlerFunc {
 			albumPeriod = "all_time"
 		}
 
-		albumStartDate, albumEndDate := periodRange(albumPeriod, r.URL.Query().Get("album_start"), r.URL.Query().Get("album_end"))
+		albumStartDate, albumEndDate := periodRange(albumPeriod, r.URL.Query().Get("album_start"), r.URL.Query().Get("album_end"), loc)
 
 		albumView := r.URL.Query().Get("album_view")
 		if albumView == "" {
@@ -193,7 +213,7 @@ func profilePageHandler() http.HandlerFunc {
 			trackPeriod = "all_time"
 		}
 
-		trackStartDate, trackEndDate := periodRange(trackPeriod, r.URL.Query().Get("track_start"), r.URL.Query().Get("track_end"))
+		trackStartDate, trackEndDate := periodRange(trackPeriod, r.URL.Query().Get("track_start"), r.URL.Query().Get("track_end"), loc)
 
 		trackLimit := chartLimit("list", r.URL.Query().Get("track_limit"))
 
@@ -220,8 +240,9 @@ func profilePageHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		profileData.History = inLocation(profileData.History, loc)
 		if pageInt == 1 {
-			profileData.Rhythm = buildRhythm(userId)
+			profileData.Rhythm = buildRhythm(userId, loc, tz)
 		}
 		profileData.RawQuery = r.URL.RawQuery
 

@@ -61,12 +61,13 @@ func startOfDay(t time.Time) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
 }
 
-func buildRhythm(userId int) *Rhythm {
-	today := startOfDay(time.Now())
+// Builds the section in the user's timezone (tz is its IANA name, "" for the server's)
+func buildRhythm(userId int, loc *time.Location, tz string) *Rhythm {
+	today := startOfDay(time.Now().In(loc))
 	// weeks run Sunday to Saturday, with the current week last
 	start := today.AddDate(0, 0, -int(today.Weekday())-(heatmapWeeks-1)*daysPerWeek)
 
-	hourly, err := db.GetHourlyPlayCounts(userId, start)
+	hourly, err := db.GetHourlyPlayCounts(userId, start, tz)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot get hourly play counts: %v\n", err)
 		return nil
@@ -76,7 +77,11 @@ func buildRhythm(userId int) *Rhythm {
 	var byHour [24]int
 	r := &Rhythm{}
 	for hour, count := range hourly {
-		local := hour.Local()
+		local := hour.In(loc)
+		if tz != "" {
+			// already bucketed in the user's zone; keys are wall-clock times
+			local = time.Date(hour.Year(), hour.Month(), hour.Day(), hour.Hour(), 0, 0, 0, loc)
+		}
 		daily[startOfDay(local)] += count
 		byHour[local.Hour()] += count
 		r.YearTotal += count

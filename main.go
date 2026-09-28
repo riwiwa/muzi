@@ -13,6 +13,9 @@ import (
 	"muzi/web"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	// bundled timezone data, so per-user timezones work where the system has none (e.g. containers)
+	_ "time/tzdata"
 )
 
 func check(msg string, err error) {

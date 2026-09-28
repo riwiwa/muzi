@@ -306,12 +306,14 @@ func AddImageColumns() error {
 // spotify_paused_until: when Spotify's rate limit on the user's app ends; shared by playback
 // polling and image lookups, and kept across restarts.
 // public_profile: whether others can see the user's profile and find them in search.
+// timezone: IANA zone the user's stats are grouped in; NULL means the server's local time.
 func AddUserColumns() error {
 	_, err := Pool.Exec(
 		context.Background(),
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS lastfm_session_key TEXT;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS spotify_paused_until TIMESTAMPTZ;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS public_profile BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_lastfm_session_key ON users(lastfm_session_key);`,
 	)
 	if err != nil {

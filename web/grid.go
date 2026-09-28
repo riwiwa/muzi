@@ -69,7 +69,7 @@ func gridPageHandler() http.HandlerFunc {
 			d.Kind = "artists"
 		}
 		switch p := q.Get("period"); p {
-		case "week", "month", "year", "all_time", "custom":
+		case "day", "week", "month", "year", "all_time", "custom":
 			d.Period = p
 		}
 		if n, err := strconv.Atoi(q.Get("size")); err == nil && n >= gridMinSize && n <= gridMaxSize {
@@ -79,7 +79,8 @@ func gridPageHandler() http.HandlerFunc {
 			d.Sizes = append(d.Sizes, n)
 		}
 
-		start, end := periodRange(d.Period, q.Get("start"), q.Get("end"))
+		loc, _ := userLocation(userId)
+		start, end := periodRange(d.Period, q.Get("start"), q.Get("end"), loc)
 		limit := d.Size * d.Size
 		if d.Kind == "artists" {
 			artists, err := db.GetTopArtists(userId, limit, start, end)

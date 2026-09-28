@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"muzi/artwork"
 	"muzi/config"
@@ -64,6 +65,12 @@ type AlbumData struct {
 	Title            string
 	LoggedInUsername string
 	TemplateName     string
+}
+
+// A profile owner's timezone, for showing their plays
+func userLoc(userId int) *time.Location {
+	loc, _ := userLocation(userId)
+	return loc
 }
 
 func artistPageHandler() http.HandlerFunc {
@@ -118,6 +125,7 @@ func artistPageHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		entries = inLocation(entries, userLoc(userId))
 
 		artistData := ArtistData{
 			Username:         username,
@@ -264,6 +272,7 @@ func songPageHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		entries = inLocation(entries, userLoc(userId))
 
 		// a song's own image (custom, or fetched when its album has no cover) wins over the album cover
 		imageUrl := ""
@@ -461,6 +470,7 @@ func albumPageHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		entries = inLocation(entries, userLoc(userId))
 
 		var artistNames []string
 		seenArtistIds := make(map[int]bool)

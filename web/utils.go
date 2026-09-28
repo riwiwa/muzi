@@ -103,8 +103,9 @@ func pct(part, whole int) int {
 // Heading for a group of plays in a feed: "Today", "Yesterday", a weekday within the last
 // week, otherwise a date
 func dayLabel(t time.Time) string {
-	today := startOfDay(time.Now())
-	day := startOfDay(t.Local())
+	// "today" in the timestamp's own zone, so labels follow the profile owner's timezone
+	today := startOfDay(time.Now().In(t.Location()))
+	day := startOfDay(t)
 	switch days := int(today.Sub(day).Hours() / 24); {
 	case days <= 0:
 		return "Today"
@@ -128,7 +129,7 @@ func feedTime(t time.Time) string {
 	case d < time.Hour:
 		return fmt.Sprintf("%dm ago", int(d.Minutes()))
 	default:
-		return t.Local().Format("3:04pm")
+		return t.Format("3:04pm")
 	}
 }
 
@@ -199,6 +200,7 @@ type periodOption struct {
 // Period filters for profile charts, in display order
 func periods() []periodOption {
 	return []periodOption{
+		{"day", "Today"},
 		{"week", "7d"},
 		{"month", "30d"},
 		{"year", "Year"},

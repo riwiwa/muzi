@@ -172,8 +172,8 @@
     <details class="range">
       <summary class="chip" aria-current="{{eq .period "custom"}}">Custom</summary>
       <form class="range-form" data-prefix="{{.prefix}}" data-anchor="{{.anchor}}">
-        <label>From <input type="date" name="start" required></label>
-        <label>To <input type="date" name="end"></label>
+        <label>From <input type="datetime-local" name="start" required></label>
+        <label>To <input type="datetime-local" name="end"></label>
         <button type="submit" class="btn-small">Apply</button>
       </form>
     </details>

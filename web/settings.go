@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"muzi/db"
@@ -27,6 +28,8 @@ type settingsData struct {
 	BioMaxLength       int
 	PublicProfile      bool
 	ProfileURL         string
+	Timezone           string
+	TimezoneError      string
 	AccountError       string
 	AccountOK          string
 }
@@ -69,6 +72,7 @@ func settingsPageHandler() http.HandlerFunc {
 			Bio:                user.Bio,
 			BioMaxLength:       bioMaxLength,
 			ProfileURL:         "/profile/" + username,
+			TimezoneError:      r.URL.Query().Get("tz_error"),
 			AccountError:       r.URL.Query().Get("account_error"),
 			AccountOK:          r.URL.Query().Get("account_ok"),
 		}
@@ -78,6 +82,8 @@ func settingsPageHandler() http.HandlerFunc {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading profile visibility: %v\n", err)
 		}
+
+		d.Timezone, _ = db.GetUserTimezone(userId)
 
 		if user.ApiKey != nil {
 			d.APIKey = *user.ApiKey
@@ -273,5 +279,32 @@ func updateVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	http.Redirect(w, r, "/settings?tab=profile", http.StatusSeeOther)
+}
+
+// Sets the timezone the user's stats and history are shown in; empty means the server's
+func updateTimezoneHandler(w http.ResponseWriter, r *http.Request) {
+	username := getLoggedInUsername(r)
+	if username == "" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	userId, err := getUserIdByUsername(r.Context(), username)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+
+	tz := strings.TrimSpace(r.FormValue("timezone"))
+	// "Local" is Go's name for the server zone, which PostgreSQL doesn't know; use empty for that
+	if _, err := time.LoadLocation(tz); tz != "" && (err != nil || tz == "Local") {
+		http.Redirect(w, r, "/settings?tab=profile&tz_error="+url.QueryEscape("Unknown timezone: "+tz), http.StatusSeeOther)
+		return
+	}
+	if err := db.SetUserTimezone(userId, tz); err != nil {
+		fmt.Fprintf(os.Stderr, "Error saving timezone: %v\n", err)
+		http.Error(w, "Error saving timezone", http.StatusInternalServerError)
+		return
+	}
 	http.Redirect(w, r, "/settings?tab=profile", http.StatusSeeOther)
 }

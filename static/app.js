@@ -363,11 +363,13 @@
     });
   });
 
-  // prefill custom ranges from the URL
+  // prefill custom ranges from the URL; older links carry bare dates, which the
+  // date-and-time pickers need a time for
   var query = new URLSearchParams(window.location.search);
   $$('.range-form').forEach(function (form) {
     ['start', 'end'].forEach(function (key) {
       var value = query.get(form.dataset.prefix + key);
+      if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) value += key === 'start' ? 'T00:00' : 'T23:59';
       if (value) form.elements[key].value = value;
     });
   });
@@ -728,6 +730,30 @@
         .catch(function (err) { setGridStatus('Could not copy: ' + err.message, 'error'); })
         .finally(function () { busy(false); });
     });
+  }
+
+  // ---------- timezone picker: suggest IANA names and offer the browser's zone ----------
+
+  var tzInput = $('#timezoneInput');
+  if (tzInput) {
+    var list = $('#timezones');
+    if (Intl.supportedValuesOf) {
+      Intl.supportedValuesOf('timeZone').forEach(function (zone) {
+        var opt = document.createElement('option');
+        opt.value = zone;
+        list.appendChild(opt);
+      });
+    }
+    var detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var detectBtn = $('#detectTimezone');
+    if (detected && detected !== tzInput.value) {
+      detectBtn.textContent = 'Use ' + detected;
+      detectBtn.hidden = false;
+      detectBtn.addEventListener('click', function () {
+        tzInput.value = detected;
+        tzInput.form.requestSubmit ? tzInput.form.requestSubmit() : tzInput.form.submit();
+      });
+    }
   }
 
   // ---------- settings tabs ----------
