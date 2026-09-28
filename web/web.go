@@ -133,6 +133,7 @@ func Start() {
 	r.Patch("/api/song/{id}/batch", songBatchEditHandler())
 	r.Patch("/api/album/{id}/batch", albumBatchEditHandler())
 	r.Post("/api/scrobble/delete", deleteScrobbleHandler())
+	r.Post("/api/scrobble/edit", editScrobblesHandler())
 	r.Post("/api/upload/image", imageUploadHandler())
 	r.Get("/search", searchHandler())
 	r.Get("/import", importPageHandler())

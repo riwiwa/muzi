@@ -94,9 +94,10 @@
 </div>
 {{end}}
 
-{{/* Listening feed grouped by day: dict "entries" "username" "cover" (fallback art) "checks" "nowTitle" "nowArtist" */}}
+{{/* Listening feed grouped by day: dict "entries" "username" "cover" (fallback art) "select" (owner can
+   select plays to edit or delete) "nowTitle" "nowArtist" */}}
 {{define "feed"}}
-{{$u := .username}}{{$cover := .cover}}{{$checks := .checks}}
+{{$u := .username}}{{$cover := .cover}}{{$checks := .select}}
 <ol class="feed">
   {{if .nowTitle}}
   <li class="feed-row now-playing">
@@ -128,6 +129,35 @@
     {{if not .nowTitle}}<li class="empty">Nothing here yet.</li>{{end}}
   {{end}}
 </ol>
+{{if .select}}{{template "select-tools"}}{{end}}
+{{end}}
+
+{{/* Bar and dialog for editing or deleting selected plays */}}
+{{define "select-tools"}}
+<div class="select-bar" id="selectBar" hidden>
+  <span id="selectCount">0 selected</span>
+  <button class="btn btn-small" type="button" id="selectAll">Select all</button>
+  <button class="btn btn-small" type="button" id="selectEdit" disabled>Edit</button>
+  <button class="btn btn-small btn-danger" type="button" id="selectDelete" disabled>Delete</button>
+  <button class="btn btn-small" type="button" data-select-toggle>Done</button>
+</div>
+<div id="batchEditModal" class="modal-overlay" style="display:none;">
+  <div class="modal-content">
+    <h2>Edit <span id="batchEditCount">plays</span></h2>
+    <form id="batchEditForm">
+      <p class="modal-hint">Fill in only what you want to change; empty fields stay as they are. Separate several artists with commas.</p>
+      <label>Title <input type="text" name="song_name" autocomplete="off"></label>
+      <label>Artist <input type="text" name="artist" autocomplete="off"></label>
+      <label>Album <input type="text" name="album_name" autocomplete="off"></label>
+      <label class="switch-row"><input type="checkbox" name="clear_album"> <span>Remove the album</span></label>
+      <p class="modal-hint" id="batchEditError" role="alert"></p>
+      <div class="modal-buttons">
+        <button type="button" id="batchEditCancel" style="margin-left: auto">Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
 {{end}}
 
 {{/* Period / view / size chips for a profile chart: dict "q" "prefix" "period" "view" "limit" "anchor" "views" */}}

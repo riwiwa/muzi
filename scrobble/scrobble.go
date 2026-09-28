@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"muzi/db"
 
 	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const DuplicateToleranceSeconds = 20
@@ -447,4 +449,92 @@ func DeleteUserSpotifyCredentials(userId int) error {
 func (u *User) IsSpotifyConnected() bool {
 	_, _, _, refreshToken, _, err := GetUserSpotifyCredentials(u.Pk)
 	return err == nil && refreshToken != ""
+}
+
+// Changes to apply to a batch of plays; nil fields stay as they are
+type ScrobbleEdit struct {
+	SongName *string `json:"song_name"`
+	Artist   *string `json:"artist"`
+	Album    *string `json:"album_name"`
+}
+
+// Applies an edit to a user's plays and re-links each to its artists, album and song, splitting
+// multi-artist credits the same way scrobbling does. Plays that would become identical to an
+// existing one (same title, artist and time) are left alone and counted as skipped.
+func EditScrobbles(userId int, ids []int, edit ScrobbleEdit) (updated, skipped int, err error) {
+	type play struct {
+		id                  int
+		song, artist, album string
+	}
+	rows, err := db.Pool.Query(context.Background(),
+		`SELECT id, song_name, artist, COALESCE(album_name, '') FROM history
+		WHERE user_id = $1 AND id = ANY($2)`,
+		userId, ids)
+	if err != nil {
+		return 0, 0, err
+	}
+	var plays []play
+	for rows.Next() {
+		var p play
+		if err := rows.Scan(&p.id, &p.song, &p.artist, &p.album); err != nil {
+			rows.Close()
+			return 0, 0, err
+		}
+		plays = append(plays, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, 0, err
+	}
+
+	for _, p := range plays {
+		if edit.SongName != nil {
+			p.song = *edit.SongName
+		}
+		if edit.Artist != nil {
+			p.artist = *edit.Artist
+		}
+		if edit.Album != nil {
+			p.album = *edit.Album
+		}
+
+		artistIds, err := getOrCreateArtists(userId, parseArtistString(p.artist))
+		if err != nil {
+			return updated, skipped, err
+		}
+		var primaryArtistId *int
+		if len(artistIds) > 0 {
+			primaryArtistId = &artistIds[0]
+		}
+		albumId := 0
+		if p.album != "" && primaryArtistId != nil {
+			if albumId, _, err = db.GetOrCreateAlbum(userId, p.album, *primaryArtistId); err != nil {
+				return updated, skipped, err
+			}
+		}
+		songArtist := 0
+		if primaryArtistId != nil {
+			songArtist = *primaryArtistId
+		}
+		songId, _, err := db.GetOrCreateSong(userId, p.song, songArtist, albumId)
+		if err != nil {
+			return updated, skipped, err
+		}
+
+		_, err = db.Pool.Exec(context.Background(),
+			`UPDATE history SET song_name = $1, artist = $2, album_name = $3,
+				artist_id = $4, artist_ids = $5, song_id = $6
+			WHERE id = $7 AND user_id = $8`,
+			p.song, p.artist, p.album, primaryArtistId, artistIds, songId, p.id, userId)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			skipped++
+			continue
+		}
+		if err != nil {
+			return updated, skipped, err
+		}
+		updated++
+	}
+	return updated, skipped, nil
 }

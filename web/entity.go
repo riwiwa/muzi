@@ -19,6 +19,7 @@ import (
 	"muzi/artwork"
 	"muzi/config"
 	"muzi/db"
+	"muzi/scrobble"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -1154,6 +1155,61 @@ func imageUploadHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"url": imageUrl})
+	}
+}
+
+// Most plays one batch edit may change
+const maxBatchEdit = 1000
+
+// POST /api/scrobble/edit: {"ids": [...], "song_name"?, "artist"?, "album_name"?} changes the
+// given fields on the logged-in user's plays; fields left out stay as they are
+func editScrobblesHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := getLoggedInUsername(r)
+		if username == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userId, err := getUserIdByUsername(r.Context(), username)
+		if err != nil {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+
+		var req struct {
+			Ids []int `json:"ids"`
+			scrobble.ScrobbleEdit
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		if len(req.Ids) == 0 || len(req.Ids) > maxBatchEdit {
+			http.Error(w, fmt.Sprintf("Select between 1 and %d plays", maxBatchEdit), http.StatusBadRequest)
+			return
+		}
+		for _, f := range []*string{req.SongName, req.Artist, req.Album} {
+			if f != nil {
+				*f = strings.TrimSpace(*f)
+			}
+		}
+		if (req.SongName != nil && *req.SongName == "") || (req.Artist != nil && *req.Artist == "") {
+			http.Error(w, "Title and artist can't be empty", http.StatusBadRequest)
+			return
+		}
+		if req.SongName == nil && req.Artist == nil && req.Album == nil {
+			http.Error(w, "Nothing to change", http.StatusBadRequest)
+			return
+		}
+
+		updated, skipped, err := scrobble.EditScrobbles(userId, req.Ids, req.ScrobbleEdit)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error editing scrobbles: %v\n", err)
+			http.Error(w, "Error editing plays", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]int{"updated": updated, "skipped": skipped})
 	}
 }
 
