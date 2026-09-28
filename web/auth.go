@@ -109,7 +109,7 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 				Value:    sessionID,
 				Path:     "/",
 				HttpOnly: true,
-				Secure:   false,
+				Secure:   secureCookies(r),
 				SameSite: http.SameSiteLaxMode,
 				MaxAge:   86400 * 30,
 			})
@@ -171,7 +171,7 @@ func loginSubmit(w http.ResponseWriter, r *http.Request) {
 				Value:    sessionID,
 				Path:     "/",
 				HttpOnly: true,
-				Secure:   false,
+				Secure:   secureCookies(r),
 				SameSite: http.SameSiteLaxMode,
 				MaxAge:   86400 * 30,
 			})
