@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -114,21 +113,15 @@ func spotifyAppToken(userId int) (string, error) {
 	return body.AccessToken, nil
 }
 
-// When Spotify rate limits us (429), all Spotify requests wait out its Retry-After. Waits longer than
+// When Spotify rate limits the user's app (429), every Spotify request for that user, including
+// playback polling, waits out its Retry-After (see scrobble/ratelimit.go). Waits longer than
 // maxSpotifyWait fail instead so lookups fall back to Deezer and retry Spotify later.
 const maxSpotifyWait = time.Minute
 
 var errSpotifyLimited = errors.New("spotify rate limited")
 
-var (
-	pauseMu     sync.Mutex
-	pausedUntil time.Time
-)
-
-func waitForSpotify() error {
-	pauseMu.Lock()
-	wait := time.Until(pausedUntil)
-	pauseMu.Unlock()
+func waitForSpotify(userId int) error {
+	wait := time.Until(scrobble.SpotifyPausedUntil(userId))
 	if wait <= 0 {
 		return nil
 	}
@@ -139,43 +132,16 @@ func waitForSpotify() error {
 	return nil
 }
 
-// Logs once per pause rather than once per request
-func pauseSpotify(retryAfter string) {
-	seconds, err := strconv.Atoi(retryAfter)
-	if err != nil || seconds <= 0 {
-		seconds = 5
-	}
-	until := time.Now().Add(time.Duration(seconds) * time.Second)
-
-	pauseMu.Lock()
-	wasPaused := time.Now().Before(pausedUntil)
-	if until.After(pausedUntil) {
-		pausedUntil = until
-	}
-	pauseMu.Unlock()
-
-	if !wasPaused {
-		fmt.Fprintf(os.Stderr, "Spotify rate limited image lookups; pausing Spotify for %v (Deezer is used meanwhile)\n",
-			time.Duration(seconds)*time.Second)
-	}
-}
-
-// Whether Spotify is in a rate-limit pause too long to wait out
-func spotifyPaused() bool {
-	pauseMu.Lock()
-	defer pauseMu.Unlock()
-	return time.Until(pausedUntil) > maxSpotifyWait
-}
-
-// Spotify's limits for development-mode apps are much lower than Deezer's, so its requests
-// get their own slower pace on top of the shared throttle
-const spotifyRequestInterval = 500 * time.Millisecond
+// Image lookups share each user's Spotify quota with playback polling, which matters more, so they
+// go slowly: a big upgrade run at a faster pace once earned a multi-hour penalty that also stopped
+// Spotify scrobbling.
+const spotifyRequestInterval = 2 * time.Second
 
 var spotifyTicker = time.NewTicker(spotifyRequestInterval)
 
 func spotifyGet(userId int, path string, out any) error {
 	for attempt := 0; attempt < 3; attempt++ {
-		if err := waitForSpotify(); err != nil {
+		if err := waitForSpotify(userId); err != nil {
 			return err
 		}
 		token, err := spotifyAppToken(userId)
@@ -198,7 +164,7 @@ func spotifyGet(userId int, path string, out any) error {
 			defer resp.Body.Close()
 			return json.NewDecoder(resp.Body).Decode(out)
 		case http.StatusTooManyRequests:
-			pauseSpotify(resp.Header.Get("Retry-After"))
+			scrobble.PauseSpotify(userId, resp.Header.Get("Retry-After"), "image lookups")
 			resp.Body.Close()
 			continue
 		case http.StatusUnauthorized:

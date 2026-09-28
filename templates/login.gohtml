@@ -13,12 +13,13 @@
       <p>Welcome back. Your records missed you.</p>
       {{if eq .Error "invalid-creds"}}<div class="login-error">Invalid username or password.</div>{{end}}
       {{if eq .Error "session"}}<div class="login-error">Unable to create a session. Please try again.</div>{{end}}
+      {{if eq .Error "signup-closed"}}<div class="login-error">Signup is closed on this server.</div>{{end}}
       <form action="/loginsubmit" method="POST">
         <label for="uname">Username <input type="text" id="uname" name="uname" autocomplete="username" autofocus required></label>
         <label for="pass">Password <input type="password" id="pass" name="pass" autocomplete="current-password" required></label>
         <input type="submit" value="Log in">
       </form>
-      <div class="auth-switch">New here? <a href="/createaccount">Create an account</a></div>
+      {{if .SignupOpen}}<div class="auth-switch">New here? <a href="/createaccount">Create an account</a></div>{{end}}
     </main>
   </body>
 </html>

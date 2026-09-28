@@ -539,6 +539,41 @@ func UpdateSongImage(id int, imageUrl string) error {
 	return err
 }
 
+type UserResult struct {
+	Username string
+	Plays    int
+}
+
+// Finds users by name for search: public profiles, plus the viewer themselves
+func SearchUsers(viewerId int, query string) ([]UserResult, float64, error) {
+	rows, err := Pool.Query(context.Background(),
+		`SELECT u.username, (SELECT COUNT(*) FROM history h WHERE h.user_id = u.pk),
+			similarity(u.username, $2) AS sim
+		FROM users u
+		WHERE (u.public_profile OR u.pk = $1)
+			AND (similarity(u.username, $2) > 0.2 OR LOWER(u.username) LIKE LOWER($3))
+		ORDER BY sim DESC
+		LIMIT 5`,
+		viewerId, query, "%"+query+"%")
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var users []UserResult
+	var maxSim float64
+	for rows.Next() {
+		var u UserResult
+		var sim float64
+		if err := rows.Scan(&u.Username, &u.Plays, &sim); err != nil {
+			return nil, 0, err
+		}
+		users = append(users, u)
+		maxSim = max(maxSim, sim)
+	}
+	return users, maxSim, rows.Err()
+}
+
 func SearchSongs(userId int, query string) ([]Song, float64, error) {
 	likePattern := "%" + query + "%"
 	rows, err := Pool.Query(context.Background(),

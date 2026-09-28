@@ -12,9 +12,9 @@
 - **Rhythm:** a year-long heatmap of daily plays, a 24-hour listening clock, and listening streaks.
 - **Grid maker:** an N×N collage (1×1 up to 10×10) of your top albums or artists for any period. Save it as a PNG or copy it to your clipboard in one click.
 - **Artwork:** artist, album and track images are fetched automatically from Spotify (if you add credentials) or Deezer. Upload your own to override any of them.
-- **Search:** press `/` or `Ctrl+K` anywhere to search your library.
+- **Search:** press `/` or `Ctrl+K` anywhere to search your library and other people's public profiles.
 - **Editing:** rename artists, albums and tracks, remove scrobbles, and add plays by hand. Multi-artist tracks are split into their artists.
-- **Profile customization:** upload and crop a profile picture, and write a bio.
+- **Profile customization:** upload and crop a profile picture, write a bio, and choose whether your profile is public. Profiles are private until you share them.
 - **Mobile:** the UI works on phones as well as desktop.
 
 ## Screenshots
@@ -42,7 +42,7 @@ cd muzi
 go run main.go
 ```
 
-muzi creates its database and tables on first start. The web UI runs on port 1234 by default. Open http://localhost:1234 and create an account.
+muzi creates its database and tables on first start. The web UI runs on port 1234 by default. Open http://localhost:1234 and create an account. After the first account exists, signup is closed unless you set `allow_signup = true`.
 
 muzi reads `config.toml`, `templates/` and `static/` from its working directory, so run it from the repository folder.
 
@@ -55,6 +55,8 @@ muzi reads `config.toml`, `templates/` and `static/` from its working directory,
 address = "0.0.0.0:1234"
 # Public URL, if muzi is behind a reverse proxy; used for the Spotify redirect URI
 # public_url = "https://muzi.example.com"
+# Let anyone who can reach the server create an account (the first account is always allowed)
+allow_signup = false
 
 [database]
 host = "localhost"
@@ -82,7 +84,7 @@ Generate an API key under **Settings → Scrobbling**, then point your scrobbler
 | Protocol | Endpoint |
 |---|---|
 | ListenBrainz | `http://<host>:1234/1/submit-listens` (API key as the token) |
-| Last.fm compatible | `http://<host>:1234/2.0/` |
+| Last.fm compatible | `http://<host>:1234/2.0/` (your muzi username, with the API key as the password) |
 
 For **MPD**, [listenbrainz-mpd](https://codeberg.org/elomatreb/listenbrainz-mpd) works out of the box:
 

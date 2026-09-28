@@ -80,6 +80,10 @@ func artistPageHandler() http.HandlerFunc {
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
+		if !canViewProfile(r, userId) {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
 
 		artist, err := db.GetArtistByName(userId, artistName)
 		if err != nil {
@@ -163,6 +167,10 @@ func songPageHandler() http.HandlerFunc {
 		userId, err := getUserIdByUsername(r.Context(), username)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot find user %s: %v\n", username, err)
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		if !canViewProfile(r, userId) {
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
@@ -306,6 +314,9 @@ func editArtistHandler() http.HandlerFunc {
 			http.Error(w, "Invalid artist ID", http.StatusBadRequest)
 			return
 		}
+		if !requireOwner(w, r, "artists", artistId) {
+			return
+		}
 
 		r.ParseForm()
 		name := r.Form.Get("name")
@@ -342,6 +353,9 @@ func editSongHandler() http.HandlerFunc {
 		songId, err := strconv.Atoi(songIdStr)
 		if err != nil {
 			http.Error(w, "Invalid song ID", http.StatusBadRequest)
+			return
+		}
+		if !requireOwner(w, r, "songs", songId) {
 			return
 		}
 
@@ -392,6 +406,10 @@ func albumPageHandler() http.HandlerFunc {
 		userId, err := getUserIdByUsername(r.Context(), username)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot find user %s: %v\n", username, err)
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		if !canViewProfile(r, userId) {
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
@@ -497,6 +515,9 @@ func editAlbumHandler() http.HandlerFunc {
 			http.Error(w, "Invalid album ID", http.StatusBadRequest)
 			return
 		}
+		if !requireOwner(w, r, "albums", albumId) {
+			return
+		}
 
 		err = db.UpdateAlbum(albumId, title, coverUrl, spotifyId, musicbrainzId)
 		if err != nil {
@@ -555,6 +576,9 @@ func artistInlineEditHandler() http.HandlerFunc {
 		artistId, err := strconv.Atoi(artistIdStr)
 		if err != nil {
 			http.Error(w, "Invalid artist ID", http.StatusBadRequest)
+			return
+		}
+		if !requireOwner(w, r, "artists", artistId) {
 			return
 		}
 
@@ -636,6 +660,9 @@ func artistBatchEditHandler() http.HandlerFunc {
 			http.Error(w, "Invalid artist ID", http.StatusBadRequest)
 			return
 		}
+		if !requireOwner(w, r, "artists", artistId) {
+			return
+		}
 
 		var req BatchEditRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -693,6 +720,9 @@ func songInlineEditHandler() http.HandlerFunc {
 			http.Error(w, "Invalid song ID", http.StatusBadRequest)
 			return
 		}
+		if !requireOwner(w, r, "songs", songId) {
+			return
+		}
 
 		field := r.URL.Query().Get("field")
 		if field == "" {
@@ -746,6 +776,9 @@ func songBatchEditHandler() http.HandlerFunc {
 		songId, err := strconv.Atoi(songIdStr)
 		if err != nil {
 			http.Error(w, "Invalid song ID", http.StatusBadRequest)
+			return
+		}
+		if !requireOwner(w, r, "songs", songId) {
 			return
 		}
 
@@ -808,6 +841,9 @@ func albumInlineEditHandler() http.HandlerFunc {
 			http.Error(w, "Invalid album ID", http.StatusBadRequest)
 			return
 		}
+		if !requireOwner(w, r, "albums", albumId) {
+			return
+		}
 
 		field := r.URL.Query().Get("field")
 		if field == "" {
@@ -850,6 +886,9 @@ func albumBatchEditHandler() http.HandlerFunc {
 		albumId, err := strconv.Atoi(albumIdStr)
 		if err != nil {
 			http.Error(w, "Invalid album ID", http.StatusBadRequest)
+			return
+		}
+		if !requireOwner(w, r, "albums", albumId) {
 			return
 		}
 
@@ -898,6 +937,15 @@ type SearchResult struct {
 	Url    string  `json:"url"`
 	Count  int     `json:"count"`
 	Score  float64 `json:"-"`
+}
+
+// Name match plus a nudge for things you play a lot. People rank by name match only: a user's
+// total plays would otherwise put them above everything in your library.
+func searchRank(r SearchResult) float64 {
+	if r.Type == "user" {
+		return r.Score
+	}
+	return r.Score + float64(r.Count)*0.01
 }
 
 func searchHandler() http.HandlerFunc {
@@ -977,12 +1025,21 @@ func searchHandler() http.HandlerFunc {
 			}
 		}
 
+		users, userSim, err := db.SearchUsers(userId, query)
+		if err == nil {
+			for _, u := range users {
+				results = append(results, SearchResult{
+					Type:  "user",
+					Name:  u.Username,
+					Url:   "/profile/" + url.PathEscape(u.Username),
+					Count: u.Plays,
+					Score: userSim + 0.3,
+				})
+			}
+		}
+
 		sort.Slice(results, func(i, j int) bool {
-			return results[i].Score+float64(
-				results[i].Count,
-			)*0.01 > results[j].Score+float64(
-				results[j].Count,
-			)*0.01
+			return searchRank(results[i]) > searchRank(results[j])
 		})
 
 		w.Header().Set("Content-Type", "application/json")
@@ -1000,6 +1057,23 @@ func refreshImage(entity string, id int) {
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		fmt.Fprintf(os.Stderr, "Error fetching %s image: %v\n", entity, err)
 	}
+}
+
+// Checks that the logged-in user owns the artist, album or song being edited, writing a 404 when
+// they don't (so other users' IDs can't be probed). table must be "artists", "albums" or "songs".
+func requireOwner(w http.ResponseWriter, r *http.Request, table string, id int) bool {
+	userId, err := getUserIdByUsername(r.Context(), getLoggedInUsername(r))
+	if err != nil {
+		http.Error(w, "Not logged in", http.StatusUnauthorized)
+		return false
+	}
+	var owner int
+	err = db.Pool.QueryRow(r.Context(), "SELECT user_id FROM "+table+" WHERE id = $1", id).Scan(&owner)
+	if err != nil || owner != userId {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return false
+	}
+	return true
 }
 
 const maxImageSize = 5 * 1024 * 1024

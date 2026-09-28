@@ -97,6 +97,10 @@ func profilePageHandler() http.HandlerFunc {
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
+		if !canViewProfile(r, userId) {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
 
 		pageStr := r.URL.Query().Get("page")
 		var pageInt int

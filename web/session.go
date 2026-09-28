@@ -92,3 +92,15 @@ func logoutHandler() http.HandlerFunc {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
 }
+
+// Whether the requester may see a user's profile pages: always their own, others only if public
+func canViewProfile(r *http.Request, userId int) bool {
+	if viewer := getLoggedInUsername(r); viewer != "" {
+		if viewerId, err := getUserIdByUsername(r.Context(), viewer); err == nil && viewerId == userId {
+			return true
+		}
+	}
+	var public bool
+	err := db.Pool.QueryRow(r.Context(), "SELECT public_profile FROM users WHERE pk = $1", userId).Scan(&public)
+	return err == nil && public
+}

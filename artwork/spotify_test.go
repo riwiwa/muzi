@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"muzi/scrobble"
 )
 
 func TestSpotifyArtistImageRetriesAfterRateLimit(t *testing.T) {
@@ -90,22 +92,23 @@ func TestLongSpotifyPauseSkipsRequests(t *testing.T) {
 	oldURL := spotifyAPIURL
 	spotifyAPIURL = srv.URL
 	defer func() { spotifyAPIURL = oldURL }()
-	tokens[1] = appToken{accessToken: "test-token", expiresAt: time.Now().Add(time.Hour)}
-	defer delete(tokens, 1)
+	// a user of its own, since the pause lasts for the rest of the test run
+	const userId = 2
+	tokens[userId] = appToken{accessToken: "test-token", expiresAt: time.Now().Add(time.Hour)}
+	defer delete(tokens, userId)
 
-	pauseSpotify("3600")
-	defer func() { pausedUntil = time.Time{} }()
+	scrobble.PauseSpotify(userId, "3600", "a test")
 
-	if !spotifyPaused() {
+	if !scrobble.SpotifyPaused(userId) {
 		t.Fatal("expected Spotify to be paused")
 	}
-	if _, _, err := spotifyArtistImage(1, "", "anyone"); err != errSpotifyLimited {
+	if _, _, err := spotifyArtistImage(userId, "", "anyone"); err != errSpotifyLimited {
 		t.Errorf("got err %v, want errSpotifyLimited", err)
 	}
 	if calls.Load() != 0 {
 		t.Errorf("made %d requests while paused", calls.Load())
 	}
-	if cond := artistColumns.pendingCondition(); strings.Contains(cond, "spotify_client_id") {
-		t.Errorf("upgrades should be skipped while paused, got condition: %s", cond)
+	if cond := artistColumns.pendingCondition(); !strings.Contains(cond, "spotify_paused_until") {
+		t.Errorf("upgrades should be skipped for paused users, got condition: %s", cond)
 	}
 }
