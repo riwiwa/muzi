@@ -43,6 +43,7 @@ func main() {
 	defer db.Pool.Close()
 
 	check("ensuring all tables exist", db.CreateAllTables())
+	check("running migrations", db.RunMigrations())
 
 	// `muzi reset-password <username>` sets a new random password and exits
 	// arguments after flags, so this works alongside -config
