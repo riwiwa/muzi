@@ -2,7 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/BurntSushi/toml"
 )
@@ -78,8 +81,44 @@ func LoadConfig() (*Config, error) {
 			return nil, fmt.Errorf("error parsing %s: %w", path, err)
 		}
 	}
+	if err := applyEnv(cfg); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
+}
+
+// Environment variables override the config file, which suits containers
+var envOverrides = map[string]func(c *Config) *string{
+	"MUZI_ADDRESS":     func(c *Config) *string { return &c.Server.Address },
+	"MUZI_PUBLIC_URL":  func(c *Config) *string { return &c.Server.PublicUrl },
+	"MUZI_DB_HOST":     func(c *Config) *string { return &c.Database.Host },
+	"MUZI_DB_PORT":     func(c *Config) *string { return &c.Database.Port },
+	"MUZI_DB_USER":     func(c *Config) *string { return &c.Database.User },
+	"MUZI_DB_PASSWORD": func(c *Config) *string { return &c.Database.Password },
+	"MUZI_DB_NAME":     func(c *Config) *string { return &c.Database.Name },
+	"MUZI_UPLOADS_DIR": func(c *Config) *string { return &c.Storage.UploadsDir },
+}
+
+func applyEnv(c *Config) error {
+	for name, field := range envOverrides {
+		if v, ok := os.LookupEnv(name); ok {
+			*field(c) = v
+		}
+	}
+	for name, field := range map[string]*bool{
+		"MUZI_ALLOW_SIGNUP":      &c.Server.AllowSignup,
+		"MUZI_IMAGES_AUTO_FETCH": &c.Images.AutoFetch,
+	} {
+		if v, ok := os.LookupEnv(name); ok {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				return fmt.Errorf("%s must be true or false, got %q", name, v)
+			}
+			*field = b
+		}
+	}
+	return nil
 }
 
 func Get() *Config {
@@ -93,11 +132,16 @@ func Get() *Config {
 	return cfg
 }
 
+// Connection URL for the database (or just the server, to create the database). The user and
+// password are escaped, so passwords with characters like @ or / work.
 func (d *DatabaseConfig) GetDbUrl(withDb bool) string {
-	if withDb {
-		return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
-			d.User, d.Password, d.Host, d.Port, d.Name)
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(d.User, d.Password),
+		Host:   net.JoinHostPort(d.Host, d.Port),
 	}
-	return fmt.Sprintf("postgres://%s:%s@%s:%s",
-		d.User, d.Password, d.Host, d.Port)
+	if withDb {
+		u.Path = "/" + d.Name
+	}
+	return u.String()
 }

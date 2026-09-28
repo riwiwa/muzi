@@ -1,0 +1,9 @@
+.git
+.github
+docs
+static/uploads
+muzi
+config.toml
+AGENTS.md
+appledata
+.env

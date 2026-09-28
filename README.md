@@ -51,12 +51,24 @@ go build -o muzi .
 ./muzi -config /etc/muzi/config.toml   # defaults to ./config.toml
 ```
 
+### With Docker
+
+```sh
+git clone https://github.com/riwiwa/muzi.git && cd muzi
+echo "MUZI_DB_PASSWORD=$(openssl rand -hex 16)" > .env
+echo "TZ=America/Los_Angeles" >> .env   # default timezone for users who haven't picked one
+docker compose up -d
+```
+
+muzi is then on http://localhost:1234, with its database and uploads in Docker volumes.
+
 ### Resetting a password
 
 If someone is locked out, run this from the muzi folder:
 
 ```sh
 muzi reset-password <username>   # or: go run main.go reset-password <username>
+docker compose exec muzi muzi reset-password <username>   # with Docker
 ```
 
 It prints a new random password and logs that user out everywhere. Users can change their own password under **Settings → Account**.
@@ -88,6 +100,8 @@ auto_fetch = true
 # Where uploaded images are saved (relative paths are relative to the working directory)
 uploads_dir = "static/uploads"
 ```
+
+Every setting can also come from an environment variable, which overrides the file: `MUZI_ADDRESS`, `MUZI_PUBLIC_URL`, `MUZI_ALLOW_SIGNUP`, `MUZI_DB_HOST`, `MUZI_DB_PORT`, `MUZI_DB_USER`, `MUZI_DB_PASSWORD`, `MUZI_DB_NAME`, `MUZI_IMAGES_AUTO_FETCH` and `MUZI_UPLOADS_DIR`.
 
 ## Importing your history
 
