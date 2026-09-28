@@ -162,6 +162,21 @@ kbd {
   transition: background 0.15s, color 0.15s;
 }
 .topnav a:hover { background: var(--bg-hover); color: var(--text); }
+/* the logout button looks like the other nav icons */
+.logout-form { display: contents; }
+.topnav .logout-form button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+.topnav .logout-form button:hover { background: var(--bg-hover); color: var(--text); }
+.topnav .logout-form button:active { transform: none; }
 .topnav svg { width: 19px; height: 19px; }
 
 /* ---------- layout ---------- */
@@ -1168,7 +1183,7 @@ code {
 }
 
 @media (max-width: 360px) {
-  .topnav a { width: 32px; }
+  .topnav a, .topnav .logout-form button { width: 32px; }
   .count { font-size: 12px; }
 }
 

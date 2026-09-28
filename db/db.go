@@ -47,6 +47,9 @@ func CreateAllTables() error {
 	if err := AddUserColumns(); err != nil {
 		return err
 	}
+	if err := CreateAppSecretsTable(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -315,6 +318,17 @@ func AddUserColumns() error {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error adding user columns: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+// Server-wide secrets, such as the key CSRF tokens are derived from
+func CreateAppSecretsTable() error {
+	_, err := Pool.Exec(context.Background(),
+		`CREATE TABLE IF NOT EXISTS app_secrets (name TEXT PRIMARY KEY, value BYTEA NOT NULL);`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating app_secrets table: %v\n", err)
 		return err
 	}
 	return nil

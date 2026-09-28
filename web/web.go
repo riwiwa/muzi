@@ -93,10 +93,15 @@ func Start() {
 	addr := config.Get().Server.Address
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(csrfMiddleware)
 	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(http.Dir("./static"))))
 	r.Get("/", rootHandler())
 	r.Get("/login", loginPageHandler())
-	r.Get("/logout", logoutHandler())
+	r.Post("/logout", logoutHandler())
+	// logging out is a POST so other sites can't do it with a link; old links just go home
+	r.Get("/logout", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
 	r.Get("/createaccount", createAccountPageHandler())
 	r.Get("/profile/{username}", profilePageHandler())
 	r.Get("/profile/{username}/artist/{artist}", artistPageHandler())

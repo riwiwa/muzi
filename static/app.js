@@ -9,10 +9,29 @@
     return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
   }
 
+  // CSRF token for this session, set by the server in a script-readable cookie
+  function csrf() {
+    var m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  window.muziCSRF = csrf;
+
+  // every POST form carries the token as a field
+  $$('form').forEach(function (form) {
+    if ((form.getAttribute('method') || '').toLowerCase() !== 'post') return;
+    var field = document.createElement('input');
+    field.type = 'hidden';
+    field.name = 'csrf_token';
+    field.value = csrf();
+    form.appendChild(field);
+  });
+
   function request(method, url, body) {
+    var headers = { 'X-CSRF-Token': csrf() };
+    if (body) headers['Content-Type'] = 'application/json';
     return fetch(url, {
       method: method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      headers: headers,
       body: body ? JSON.stringify(body) : undefined
     }).then(function (res) {
       if (!res.ok) return res.text().then(function (t) { throw new Error(t || res.statusText); });
@@ -215,7 +234,7 @@
       var form = new FormData();
       form.append('file', file);
       target.style.opacity = '0.5';
-      fetch('/api/upload/image', { method: 'POST', body: form })
+      fetch('/api/upload/image', { method: 'POST', body: form, headers: { 'X-CSRF-Token': csrf() } })
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
           return res.json();
@@ -458,7 +477,7 @@
         if (!blob) { cropError.textContent = 'Could not crop that image.'; saveBtn.disabled = false; return; }
         var form = new FormData();
         form.append('file', blob, blob.type === 'image/webp' ? 'avatar.webp' : 'avatar.png');
-        fetch(fileInput.form.action, { method: 'POST', body: form })
+        fetch(fileInput.form.action, { method: 'POST', body: form, headers: { 'X-CSRF-Token': csrf() } })
           .then(function (res) {
             if (!res.ok) throw new Error(res.statusText);
             // the server redirects back to settings, with pfp_error set if it rejected the image

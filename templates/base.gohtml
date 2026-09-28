@@ -55,9 +55,11 @@
     <a href="/profile/{{.LoggedInUsername}}" title="Your profile" aria-label="Your profile">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.3-3.2 3.9-4.8 7-4.8s5.7 1.6 7 4.8"/></svg>
     </a>
-    <a href="/logout" title="Log out" aria-label="Log out">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg>
-    </a>
+    <form method="POST" action="/logout" class="logout-form">
+      <button type="submit" title="Log out" aria-label="Log out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg>
+      </button>
+    </form>
     {{else}}
     <a class="btn btn-small" style="width: auto; border-radius: 999px" href="/login">Log in</a>
     {{end}}

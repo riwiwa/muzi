@@ -1,3 +1,9 @@
+// CSRF token for this session (see web/csrf.go); this script can load before app.js
+function csrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
 function handleImport(formId, progressPrefix, endpoint, progressUrl, formatLabel) {
   const form = document.getElementById(formId);
   const progressContainer = document.getElementById(progressPrefix + '-progress');
@@ -24,6 +30,7 @@ function handleImport(formId, progressPrefix, endpoint, progressUrl, formatLabel
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken() },
         body: progressPrefix === 'lastfm' 
           ? new URLSearchParams(new FormData(form))
           : new FormData(form)
