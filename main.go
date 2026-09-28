@@ -43,6 +43,20 @@ func main() {
 	defer db.Pool.Close()
 
 	check("ensuring all tables exist", db.CreateAllTables())
+
+	// `muzi reset-password <username>` sets a new random password and exits
+	// arguments after flags, so this works alongside -config
+	if args := flag.Args(); len(args) > 0 && args[0] == "reset-password" {
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, "usage: muzi reset-password <username>")
+			os.Exit(2)
+		}
+		password, err := web.ResetPassword(args[1])
+		check("resetting password", err)
+		fmt.Printf("New password for %s: %s\nAll of their sessions have been logged out.\n", args[1], password)
+		return
+	}
+
 	check("creating albums and songs for imported history", db.BackfillEntities())
 	check("cleaning expired sessions", db.CleanupExpiredSessions())
 	scrobble.StartSpotifyPoller()

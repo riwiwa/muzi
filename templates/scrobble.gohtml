@@ -89,7 +89,7 @@
         try {
           const response = await fetch('/scrobble', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.muziCSRF() },
             body: JSON.stringify({ tracks: tracks })
           });
           const result = await response.json();
