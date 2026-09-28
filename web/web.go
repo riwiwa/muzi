@@ -139,6 +139,7 @@ func Start() {
 	r.Get("/import/lastfm/progress", importLastFMProgressHandler)
 	r.Get("/import/spotify/progress", importSpotifyProgressHandler)
 	r.Get("/scrobble", scrobblePageHandler())
+	r.Get("/grid", gridPageHandler())
 	r.Post("/scrobble", scrobbleSubmitHandler())
 
 	r.Handle("/2.0", scrobble.NewLastFMHandler())

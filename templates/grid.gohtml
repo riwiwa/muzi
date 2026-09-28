@@ -1,0 +1,66 @@
+{{define "grid"}}
+  <header class="page-title">
+    <div class="eyebrow">Grid maker</div>
+    <h1>Your {{.Size}}×{{.Size}}</h1>
+    <p>Top {{.Kind}} for the period, ready to save or paste anywhere.</p>
+  </header>
+
+  <div class="grid-controls">
+    <div class="chips">
+      <div class="chip-group">
+        {{range periods}}
+        <a class="chip" aria-current="{{eq $.Period .Key}}" href="{{withParams $.RawQuery "period" .Key}}">{{.Label}}</a>
+        {{end}}
+        <details class="range">
+          <summary class="chip" aria-current="{{eq .Period "custom"}}">Custom</summary>
+          <form class="range-form" data-prefix="" data-anchor="grid">
+            <label>From <input type="date" name="start" required></label>
+            <label>To <input type="date" name="end"></label>
+            <button type="submit" class="btn-small">Apply</button>
+          </form>
+        </details>
+      </div>
+      <div class="chip-group">
+        <a class="chip" aria-current="{{eq .Kind "albums"}}" href="{{withParams .RawQuery "kind" ""}}">Albums</a>
+        <a class="chip" aria-current="{{eq .Kind "artists"}}" href="{{withParams .RawQuery "kind" "artists"}}">Artists</a>
+      </div>
+      <div class="chip-group">
+        <a class="chip" aria-current="{{.Names}}" href="{{withParams .RawQuery "names" (or (and (not .Names) "1") "")}}">Names</a>
+      </div>
+    </div>
+    <div class="chips">
+      <div class="chip-group grid-sizes" role="group" aria-label="Grid size">
+        {{range .Sizes}}
+        <a class="chip" aria-current="{{eq $.Size .}}" href="{{withParams $.RawQuery "size" (print .)}}" aria-label="{{.}} by {{.}}">{{.}}</a>
+        {{end}}
+      </div>
+    </div>
+  </div>
+
+  <section id="grid" class="grid-wrap">
+    <div class="collage" id="collage" style="--n: {{.Size}}" data-size="{{.Size}}" data-names="{{.Names}}"
+      data-filename="muzi-{{.Kind}}-{{.Period}}-{{.Size}}x{{.Size}}.png">
+      {{range .Items}}
+      <a class="collage-cell" href="{{.Url}}" title="{{.Name}}{{if .Sub}} — {{.Sub}}{{end}} · {{formatInt .Plays}} plays"
+        data-name="{{.Name}}" data-sub="{{.Sub}}" data-plays="{{formatInt .Plays}} plays" data-hue="{{hue .Name}}" data-initial="{{initial .Name}}">
+        {{if .ImageUrl}}<img src="{{.ImageUrl}}" alt="{{.Name}}" crossorigin="anonymous" decoding="async">{{else}}<span class="art-ph" style="--h: {{hue .Name}}" aria-hidden="true">{{initial .Name}}</span>{{end}}
+        {{if $.Names}}<span class="collage-caption"><b>{{.Name}}</b>{{if .Sub}}<span>{{.Sub}}</span>{{end}}</span>{{end}}
+      </a>
+      {{end}}
+      {{range .Empty}}<span class="collage-cell collage-empty" aria-hidden="true"></span>{{end}}
+    </div>
+
+    <div class="grid-actions">
+      <button type="button" class="btn-primary" id="gridSave" {{if not .Items}}disabled{{end}}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+        Save image
+      </button>
+      <button type="button" id="gridCopy" {{if not .Items}}disabled{{end}}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+        Copy image
+      </button>
+      <span class="grid-status" id="gridStatus" role="status"></span>
+    </div>
+    {{if not .Items}}<p class="empty">No plays in this period yet.</p>{{end}}
+  </section>
+{{end}}

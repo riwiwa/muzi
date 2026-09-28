@@ -473,6 +473,150 @@
     });
   }
 
+  // ---------- grid maker: save or copy the collage as a PNG ----------
+
+  var collage = $('#collage');
+  if (collage) {
+    var gridStatus = $('#gridStatus');
+    var gridButtons = [$('#gridSave'), $('#gridCopy')];
+    var SERIF = '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif';
+    var SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+    function setGridStatus(text, kind) {
+      gridStatus.textContent = text;
+      gridStatus.className = 'grid-status' + (kind ? ' ' + kind : '');
+    }
+
+    function busy(on) {
+      gridButtons.forEach(function (b) { if (b) b.disabled = on; });
+    }
+
+    function whenLoaded(img) {
+      if (img.complete) return Promise.resolve();
+      return new Promise(function (resolve) {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      });
+    }
+
+    // shortens text with an ellipsis to fit a width
+    function fit(ctx, text, width) {
+      if (ctx.measureText(text).width <= width) return text;
+      while (text.length > 1 && ctx.measureText(text + '…').width > width) text = text.slice(0, -1);
+      return text + '…';
+    }
+
+    function drawCell(ctx, cell, x, y, tile, names) {
+      if (cell.classList.contains('collage-empty')) {
+        ctx.fillStyle = '#090a08';
+        ctx.fillRect(x, y, tile, tile);
+        return;
+      }
+      var img = cell.querySelector('img');
+      if (img && img.naturalWidth) {
+        // crop to a centered square, like object-fit: cover
+        var side = Math.min(img.naturalWidth, img.naturalHeight);
+        ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, x, y, tile, tile);
+      } else {
+        var h = cell.dataset.hue;
+        var bg = ctx.createRadialGradient(x + tile * 0.2, y + tile * 0.1, 0, x + tile * 0.2, y + tile * 0.1, tile * 1.2);
+        bg.addColorStop(0, 'hsl(' + h + ' 45% 32%)');
+        bg.addColorStop(1, 'hsl(' + h + ' 25% 12%)');
+        ctx.fillStyle = bg;
+        ctx.fillRect(x, y, tile, tile);
+        ctx.fillStyle = 'hsl(' + h + ' 60% 82%)';
+        ctx.font = 'italic ' + Math.round(tile * 0.44) + 'px ' + SERIF;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(cell.dataset.initial, x + tile / 2, y + tile / 2);
+      }
+
+      if (names) {
+        var shade = ctx.createLinearGradient(0, y + tile * 0.5, 0, y + tile);
+        shade.addColorStop(0, 'rgba(0,0,0,0)');
+        shade.addColorStop(1, 'rgba(0,0,0,0.85)');
+        ctx.fillStyle = shade;
+        ctx.fillRect(x, y + tile * 0.5, tile, tile * 0.5);
+
+        var pad = tile * 0.07;
+        var size = Math.max(11, Math.round(tile * 0.075));
+        var lines = [[cell.dataset.name, '600 ' + size + 'px ' + SANS, '#fff']];
+        if (cell.dataset.sub) lines.push([cell.dataset.sub, size * 0.85 + 'px ' + SANS, 'rgba(255,255,255,0.75)']);
+        lines.push([cell.dataset.plays, size * 0.8 + 'px ' + SANS, 'rgba(255,255,255,0.6)']);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        var ly = y + tile - pad;
+        for (var i = lines.length - 1; i >= 0; i--) {
+          ctx.font = lines[i][1];
+          ctx.fillStyle = lines[i][2];
+          ctx.fillText(fit(ctx, lines[i][0], tile - pad * 2), x + pad, ly);
+          ly -= size * 1.25;
+        }
+      }
+    }
+
+    function renderGrid() {
+      var n = Number(collage.dataset.size);
+      var tile = Math.min(640, Math.floor(3000 / n));
+      var names = collage.dataset.names === 'true';
+      var cells = $$('.collage-cell', collage);
+      var imgs = $$('img', collage);
+
+      return Promise.all(imgs.map(whenLoaded)).then(function () {
+        var canvas = document.createElement('canvas');
+        canvas.width = canvas.height = n * tile;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#0d0e0c';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        cells.forEach(function (cell, i) {
+          drawCell(ctx, cell, (i % n) * tile, Math.floor(i / n) * tile, tile, names);
+        });
+        return new Promise(function (resolve, reject) {
+          try {
+            canvas.toBlob(function (blob) {
+              if (blob) resolve(blob); else reject(new Error('could not render the image'));
+            }, 'image/png');
+          } catch (err) {
+            // an image served without CORS headers taints the canvas
+            reject(new Error('an image could not be exported (its host blocks it)'));
+          }
+        });
+      });
+    }
+
+    $('#gridSave').addEventListener('click', function () {
+      busy(true);
+      setGridStatus('Rendering…');
+      renderGrid()
+        .then(function (blob) {
+          var link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = collage.dataset.filename;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(function () { URL.revokeObjectURL(link.href); }, 10000);
+          setGridStatus('Saved ' + collage.dataset.filename, 'ok');
+        })
+        .catch(function (err) { setGridStatus('Could not save: ' + err.message, 'error'); })
+        .finally(function () { busy(false); });
+    });
+
+    $('#gridCopy').addEventListener('click', function () {
+      if (!window.isSecureContext || !navigator.clipboard || !window.ClipboardItem) {
+        setGridStatus('Copying images needs HTTPS or localhost; use Save image instead.', 'error');
+        return;
+      }
+      busy(true);
+      setGridStatus('Rendering…');
+      // pass the pending blob straight to the clipboard so Safari keeps the click's permission
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': renderGrid() })])
+        .then(function () { setGridStatus('Copied to clipboard', 'ok'); })
+        .catch(function (err) { setGridStatus('Could not copy: ' + err.message, 'error'); })
+        .finally(function () { busy(false); });
+    });
+  }
+
   // ---------- settings tabs ----------
 
   var tabs = $$('.tab-button');

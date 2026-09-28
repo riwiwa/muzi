@@ -45,6 +45,32 @@ type ProfileData struct {
 	TopTracksLimit      int
 }
 
+// Start/end bounds for a chart period ("week", "month", "year", "custom" with YYYY-MM-DD dates,
+// anything else is all time). The custom end date is inclusive.
+func periodRange(period, startStr, endStr string) (startDate, endDate *time.Time) {
+	now := time.Now()
+	switch period {
+	case "week":
+		start := now.AddDate(0, 0, -7)
+		startDate = &start
+	case "month":
+		start := now.AddDate(0, -1, 0)
+		startDate = &start
+	case "year":
+		start := now.AddDate(-1, 0, 0)
+		startDate = &start
+	case "custom":
+		if t, err := time.Parse("2006-01-02", startStr); err == nil {
+			startDate = &t
+		}
+		if t, err := time.Parse("2006-01-02", endStr); err == nil {
+			t = t.AddDate(0, 0, 1)
+			endDate = &t
+		}
+	}
+	return startDate, endDate
+}
+
 // Chart sizes: grids are a 2x2 hero tile plus rows of four, so they fill evenly at 5, 9 or 13
 func chartLimit(view, raw string) int {
 	limit, err := strconv.Atoi(raw)
@@ -125,33 +151,7 @@ func profilePageHandler() http.HandlerFunc {
 		profileData.TopArtistsLimit = limit
 		profileData.TopArtistsView = view
 
-		var startDate, endDate *time.Time
-		now := time.Now()
-		switch period {
-		case "week":
-			start := now.AddDate(0, 0, -7)
-			startDate = &start
-		case "month":
-			start := now.AddDate(0, -1, 0)
-			startDate = &start
-		case "year":
-			start := now.AddDate(-1, 0, 0)
-			startDate = &start
-		case "custom":
-			startStr := r.URL.Query().Get("start")
-			endStr := r.URL.Query().Get("end")
-			if startStr != "" {
-				if t, err := time.Parse("2006-01-02", startStr); err == nil {
-					startDate = &t
-				}
-			}
-			if endStr != "" {
-				if t, err := time.Parse("2006-01-02", endStr); err == nil {
-					t = t.AddDate(0, 0, 1)
-					endDate = &t
-				}
-			}
-		}
+		startDate, endDate := periodRange(period, r.URL.Query().Get("start"), r.URL.Query().Get("end"))
 
 		topArtists, err := db.GetTopArtists(userId, limit, startDate, endDate)
 		if err != nil {
@@ -165,33 +165,7 @@ func profilePageHandler() http.HandlerFunc {
 			albumPeriod = "all_time"
 		}
 
-		var albumStartDate, albumEndDate *time.Time
-		albumNow := time.Now()
-		switch albumPeriod {
-		case "week":
-			start := albumNow.AddDate(0, 0, -7)
-			albumStartDate = &start
-		case "month":
-			start := albumNow.AddDate(0, -1, 0)
-			albumStartDate = &start
-		case "year":
-			start := albumNow.AddDate(-1, 0, 0)
-			albumStartDate = &start
-		case "custom":
-			albumStartStr := r.URL.Query().Get("album_start")
-			albumEndStr := r.URL.Query().Get("album_end")
-			if albumStartStr != "" {
-				if t, err := time.Parse("2006-01-02", albumStartStr); err == nil {
-					albumStartDate = &t
-				}
-			}
-			if albumEndStr != "" {
-				if t, err := time.Parse("2006-01-02", albumEndStr); err == nil {
-					t = t.AddDate(0, 0, 1)
-					albumEndDate = &t
-				}
-			}
-		}
+		albumStartDate, albumEndDate := periodRange(albumPeriod, r.URL.Query().Get("album_start"), r.URL.Query().Get("album_end"))
 
 		albumView := r.URL.Query().Get("album_view")
 		if albumView == "" {
@@ -215,33 +189,7 @@ func profilePageHandler() http.HandlerFunc {
 			trackPeriod = "all_time"
 		}
 
-		var trackStartDate, trackEndDate *time.Time
-		trackNow := time.Now()
-		switch trackPeriod {
-		case "week":
-			start := trackNow.AddDate(0, 0, -7)
-			trackStartDate = &start
-		case "month":
-			start := trackNow.AddDate(0, -1, 0)
-			trackStartDate = &start
-		case "year":
-			start := trackNow.AddDate(-1, 0, 0)
-			trackStartDate = &start
-		case "custom":
-			trackStartStr := r.URL.Query().Get("track_start")
-			trackEndStr := r.URL.Query().Get("track_end")
-			if trackStartStr != "" {
-				if t, err := time.Parse("2006-01-02", trackStartStr); err == nil {
-					trackStartDate = &t
-				}
-			}
-			if trackEndStr != "" {
-				if t, err := time.Parse("2006-01-02", trackEndStr); err == nil {
-					t = t.AddDate(0, 0, 1)
-					trackEndDate = &t
-				}
-			}
-		}
+		trackStartDate, trackEndDate := periodRange(trackPeriod, r.URL.Query().Get("track_start"), r.URL.Query().Get("track_end"))
 
 		trackLimit := chartLimit("list", r.URL.Query().Get("track_limit"))
 

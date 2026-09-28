@@ -20,6 +20,7 @@
       {{if eq .TemplateName "song"}}{{template "song" .}}{{end}}
       {{if eq .TemplateName "album"}}{{template "album" .}}{{end}}
       {{if eq .TemplateName "scrobble"}}{{template "scrobble" .}}{{end}}
+      {{if eq .TemplateName "grid"}}{{template "grid" .}}{{end}}
     </main>
     {{if .LoggedInUsername}}{{template "palette"}}{{end}}
     <script src="/files/app.js" defer></script>
@@ -44,6 +45,9 @@
     {{if .LoggedInUsername}}
     <a href="/scrobble" title="Add scrobbles" aria-label="Add scrobbles">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </a>
+    <a href="/grid" title="Grid maker" aria-label="Grid maker"{{if eq .TemplateName "grid"}} aria-current="page"{{end}}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>
     </a>
     <a href="/settings" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
