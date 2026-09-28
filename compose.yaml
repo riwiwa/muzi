@@ -1,0 +1,42 @@
+# muzi with PostgreSQL. Set a real database password first, e.g. in a .env file next to this one:
+#   MUZI_DB_PASSWORD=something-long-and-random
+#   TZ=America/Los_Angeles
+# then run: docker compose up -d
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: muzi
+      POSTGRES_PASSWORD: ${MUZI_DB_PASSWORD:?set MUZI_DB_PASSWORD}
+      POSTGRES_DB: muzi
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U muzi -d muzi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  muzi:
+    build: .
+    image: muzi
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MUZI_DB_HOST: db
+      MUZI_DB_USER: muzi
+      MUZI_DB_PASSWORD: ${MUZI_DB_PASSWORD:?set MUZI_DB_PASSWORD}
+      MUZI_DB_NAME: muzi
+      # MUZI_PUBLIC_URL: https://muzi.example.com
+      TZ: ${TZ:-UTC}
+    ports:
+      - "1234:1234"
+    volumes:
+      - uploads:/data/uploads
+    restart: unless-stopped
+
+volumes:
+  db:
+  uploads:
