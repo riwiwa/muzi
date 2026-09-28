@@ -11,6 +11,21 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    # a throwaway database for the integration tests (internal/dbtest)
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: muzi
+          POSTGRES_PASSWORD: muzi
+          POSTGRES_DB: muzi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U muzi -d muzi_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
     - uses: actions/checkout@v4
 
@@ -25,8 +40,15 @@ jobs:
     - name: Vet
       run: go vet ./...
 
-    - name: Test
-      run: go test ./...
+    - name: Test (including integration tests against PostgreSQL)
+      env:
+        MUZI_TEST_DATABASE_URL: postgres://muzi:muzi@localhost:5432/muzi_test
+      # the default shell runs with pipefail, so a failing test still fails this step
+      run: go test -v ./... 2>&1 | tee test.log
+
+    - name: Make sure the integration tests ran instead of skipping
+      run: |
+        if grep -q -- "--- SKIP" test.log; then grep -- "--- SKIP" test.log; echo "integration tests were skipped"; exit 1; fi
 
   docker:
     runs-on: ubuntu-latest
