@@ -1,63 +1,41 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <link rel="stylesheet" href="/files/style.css" type="text/css">
-    <title>muzi | Import Data</title>
-    <style>
-      /* Debug: Force bar visibility */
-      #progress-fill {
-        background: linear-gradient(90deg, #0f0, #0a0) !important;
-        min-width: 2px !important;
-      }
-    </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d0e0c">
+    <title>Import · muzi</title>
+    {{template "head-common"}}
   </head>
   <body>
-    <div class="import-container">
-      <h1>Import Your Listening Data</h1>
-      <p>Welcome, {{.Username}}!</p>
-
-      <div class="import-section">
-        <h2>Spotify</h2>
-        <p>Import your Spotify listening history from your data export.</p>
-        <form id="spotify-form" method="POST" action="/import/spotify" enctype="multipart/form-data">
-          <input type="file" name="json_files" accept=".json,application/json" multiple required>
-          <button type="submit">Upload Spotify Data</button>
-        </form>
-
-        <div id="spotify-progress" class="progress-container" style="display: none;">
-          <div class="progress-status" id="spotify-progress-status">Initializing...</div>
-          <div class="progress-bar-wrapper">
-            <div class="progress-bar-fill" id="spotify-progress-fill"></div>
-            <div class="progress-text" id="spotify-progress-text">0%</div>
-          </div>
-          <div class="progress-tracks" id="spotify-progress-tracks"></div>
-          <div class="progress-error" id="spotify-progress-error"></div>
-          <div class="progress-success" id="spotify-progress-success"></div>
-        </div>
-      </div>
-
-      <div class="import-section">
+    <main class="narrow" style="margin: 0 auto; padding: 0 var(--gutter) 80px">
+      <header class="page-title">
+        <div class="eyebrow">Welcome, {{.Username}}</div>
+        <h1>Bring your history</h1>
+        <p>Import past listens now, or later from <a class="ok" href="/settings">settings</a>.</p>
+      </header>
+      <div class="card">
         <h2>Last.fm</h2>
         <p>Import your Last.fm scrobbles.</p>
         <form id="lastfm-form" method="POST" action="/import/lastfm">
-          <input type="text" name="lastfm_username" placeholder="Last.FM Username" required>
-          <input type="text" name="lastfm_api_key" placeholder="Last.FM API Key" required>
-          <button type="submit">Import from Last.fm</button>
-        </form>
-
-        <div id="lastfm-progress" class="progress-container" style="display: none;">
-          <div class="progress-status" id="lastfm-progress-status">Initializing...</div>
-          <div class="progress-bar-wrapper">
-            <div class="progress-bar-fill" id="lastfm-progress-fill"></div>
-            <div class="progress-text" id="lastfm-progress-text">0%</div>
+          <div class="row">
+            <input type="text" name="lastfm_username" placeholder="Last.fm username" required style="flex: 1 1 180px">
+            <input type="text" name="lastfm_api_key" placeholder="Last.fm API key" required style="flex: 2 1 240px">
           </div>
-          <div class="progress-tracks" id="lastfm-progress-tracks"></div>
-          <div class="progress-error" id="lastfm-progress-error"></div>
-          <div class="progress-success" id="lastfm-progress-success"></div>
-        </div>
+          <div><button type="submit">Import from Last.fm</button></div>
+        </form>
+        {{template "progress" "lastfm"}}
       </div>
-    </div>
-
+      <div class="card">
+        <h2>Spotify</h2>
+        <p>Upload the JSON files from your Spotify data export.</p>
+        <form id="spotify-form" method="POST" action="/import/spotify" enctype="multipart/form-data">
+          <input type="file" name="json_files" accept=".json,application/json" multiple required>
+          <div><button type="submit">Upload Spotify data</button></div>
+        </form>
+        {{template "progress" "spotify"}}
+      </div>
+    </main>
     <script src="/files/import.js"></script>
   </body>
 </html>

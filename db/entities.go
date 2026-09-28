@@ -596,6 +596,7 @@ type TopArtist struct {
 }
 
 type TopAlbum struct {
+	Id          int
 	AlbumName   string
 	Artist      string
 	CoverUrl    string
@@ -605,6 +606,7 @@ type TopAlbum struct {
 type TopTrack struct {
 	SongName    string
 	Artist      string
+	CoverUrl    string
 	ListenCount int
 }
 
@@ -678,51 +680,17 @@ func GetTopArtists(userId int, limit int, startDate, endDate *time.Time) ([]TopA
 }
 
 func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAlbum, error) {
-	var err error
-	var rows pgx.Rows
-
-	if startDate == nil && endDate == nil {
-		rows, err = Pool.Query(context.Background(),
-			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
-			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
-			WHERE h.user_id = $1 AND h.album_name IS NOT NULL AND h.album_name != ''
-			GROUP BY h.album_name, h.artist, a.cover_url
-			ORDER BY listen_count DESC
-			LIMIT $2`,
-			userId, limit)
-	} else if startDate != nil && endDate == nil {
-		rows, err = Pool.Query(context.Background(),
-			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
-			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
-			WHERE h.user_id = $1 AND h.timestamp >= $2 AND h.album_name IS NOT NULL AND h.album_name != ''
-			GROUP BY h.album_name, h.artist, a.cover_url
-			ORDER BY listen_count DESC
-			LIMIT $3`,
-			userId, startDate, limit)
-	} else if startDate == nil && endDate != nil {
-		rows, err = Pool.Query(context.Background(),
-			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
-			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
-			WHERE h.user_id = $1 AND h.timestamp <= $2 AND h.album_name IS NOT NULL AND h.album_name != ''
-			GROUP BY h.album_name, h.artist, a.cover_url
-			ORDER BY listen_count DESC
-			LIMIT $3`,
-			userId, endDate, limit)
-	} else {
-		rows, err = Pool.Query(context.Background(),
-			`SELECT h.album_name, h.artist, COALESCE(a.cover_url, ''), COUNT(*) as listen_count
-			FROM history h
-			LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
-			WHERE h.user_id = $1 AND h.timestamp >= $2 AND h.timestamp <= $3 AND h.album_name IS NOT NULL AND h.album_name != ''
-			GROUP BY h.album_name, h.artist, a.cover_url
-			ORDER BY listen_count DESC
-			LIMIT $4`,
-			userId, startDate, endDate, limit)
-	}
-
+	rows, err := Pool.Query(context.Background(),
+		`SELECT h.album_name, h.artist, COALESCE(a.id, 0), COALESCE(a.cover_url, ''), COUNT(*) AS listen_count
+		FROM history h
+		LEFT JOIN albums a ON a.user_id = h.user_id AND a.title = h.album_name AND a.artist_id = h.artist_id
+		WHERE h.user_id = $1 AND h.album_name IS NOT NULL AND h.album_name != ''
+			AND ($2::timestamptz IS NULL OR h.timestamp >= $2)
+			AND ($3::timestamptz IS NULL OR h.timestamp <= $3)
+		GROUP BY h.album_name, h.artist, a.id, a.cover_url
+		ORDER BY listen_count DESC
+		LIMIT $4`,
+		userId, startDate, endDate, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -730,59 +698,29 @@ func GetTopAlbums(userId int, limit int, startDate, endDate *time.Time) ([]TopAl
 
 	var topAlbums []TopAlbum
 	for rows.Next() {
-		var albumName, artist, coverUrl string
-		var count int
-		err := rows.Scan(&albumName, &artist, &coverUrl, &count)
-		if err != nil {
+		var a TopAlbum
+		if err := rows.Scan(&a.AlbumName, &a.Artist, &a.Id, &a.CoverUrl, &a.ListenCount); err != nil {
 			return nil, err
 		}
-		topAlbums = append(topAlbums, TopAlbum{AlbumName: albumName, Artist: artist, CoverUrl: coverUrl, ListenCount: count})
+		topAlbums = append(topAlbums, a)
 	}
 	return topAlbums, nil
 }
 
 func GetTopTracks(userId int, limit int, startDate, endDate *time.Time) ([]TopTrack, error) {
-	var err error
-	var rows pgx.Rows
-
-	if startDate == nil && endDate == nil {
-		rows, err = Pool.Query(context.Background(),
-			`SELECT song_name, artist, COUNT(*) as listen_count
-			FROM history
-			WHERE user_id = $1
-			GROUP BY song_name, artist
-			ORDER BY listen_count DESC
-			LIMIT $2`,
-			userId, limit)
-	} else if startDate != nil && endDate == nil {
-		rows, err = Pool.Query(context.Background(),
-			`SELECT song_name, artist, COUNT(*) as listen_count
-			FROM history
-			WHERE user_id = $1 AND timestamp >= $2
-			GROUP BY song_name, artist
-			ORDER BY listen_count DESC
-			LIMIT $3`,
-			userId, startDate, limit)
-	} else if startDate == nil && endDate != nil {
-		rows, err = Pool.Query(context.Background(),
-			`SELECT song_name, artist, COUNT(*) as listen_count
-			FROM history
-			WHERE user_id = $1 AND timestamp <= $2
-			GROUP BY song_name, artist
-			ORDER BY listen_count DESC
-			LIMIT $3`,
-			userId, endDate, limit)
-	} else {
-		rows, err = Pool.Query(context.Background(),
-			`SELECT song_name, artist, COUNT(*) as listen_count
-			FROM history
-			WHERE user_id = $1 AND timestamp >= $2 AND timestamp <= $3
-			GROUP BY song_name, artist
-			ORDER BY listen_count DESC
-			LIMIT $4`,
-			userId, startDate, endDate, limit)
-	}
-
+	rows, err := Pool.Query(context.Background(),
+		`SELECT h.song_name, h.artist, COALESCE(MAX(COALESCE(s.image_url, al.cover_url)), ''),
+			COUNT(*) AS listen_count
+		FROM history h
+		LEFT JOIN songs s ON s.id = h.song_id
+		LEFT JOIN albums al ON al.id = s.album_id
+		WHERE h.user_id = $1
+			AND ($2::timestamptz IS NULL OR h.timestamp >= $2)
+			AND ($3::timestamptz IS NULL OR h.timestamp <= $3)
+		GROUP BY h.song_name, h.artist
+		ORDER BY listen_count DESC
+		LIMIT $4`,
+		userId, startDate, endDate, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -790,13 +728,11 @@ func GetTopTracks(userId int, limit int, startDate, endDate *time.Time) ([]TopTr
 
 	var topTracks []TopTrack
 	for rows.Next() {
-		var songName, artist string
-		var count int
-		err := rows.Scan(&songName, &artist, &count)
-		if err != nil {
+		var t TopTrack
+		if err := rows.Scan(&t.SongName, &t.Artist, &t.CoverUrl, &t.ListenCount); err != nil {
 			return nil, err
 		}
-		topTracks = append(topTracks, TopTrack{SongName: songName, Artist: artist, ListenCount: count})
+		topTracks = append(topTracks, t)
 	}
 	return topTracks, nil
 }
@@ -828,12 +764,44 @@ func MergeArtists(userId int, fromArtistId, toArtistId int) error {
 	return err
 }
 
+// A page of a user's full history, newest first, with each play's artwork
+func GetHistory(userId, limit, offset int) ([]ScrobbleEntry, error) {
+	rows, err := Pool.Query(context.Background(),
+		`SELECT h.id, h.timestamp, h.song_name, COALESCE(h.album_name, ''),
+			COALESCE((SELECT name FROM artists WHERE id = h.artist_id), h.artist),
+			h.artist_ids, COALESCE(s.image_url, al.cover_url, '')
+		FROM history h
+		LEFT JOIN songs s ON s.id = h.song_id
+		LEFT JOIN albums al ON al.id = s.album_id
+		WHERE h.user_id = $1
+		ORDER BY h.timestamp DESC LIMIT $2 OFFSET $3`,
+		userId, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []ScrobbleEntry
+	for rows.Next() {
+		var e ScrobbleEntry
+		err := rows.Scan(&e.Id, &e.Timestamp, &e.SongName, &e.AlbumName, &e.ArtistName, &e.ArtistIds, &e.CoverUrl)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
 func GetHistoryForArtist(userId, artistId int, limit, offset int) ([]ScrobbleEntry, error) {
 	rows, err := Pool.Query(context.Background(),
 		`SELECT h.timestamp, h.song_name, h.album_name, h.ms_played, h.platform,
 			(SELECT name FROM artists WHERE id = h.artist_id) as artist_name,
-			h.artist_ids
-		FROM history h WHERE h.user_id = $1 AND $2 = ANY(h.artist_ids) 
+			h.artist_ids, COALESCE(s.image_url, al.cover_url, '')
+		FROM history h
+		LEFT JOIN songs s ON s.id = h.song_id
+		LEFT JOIN albums al ON al.id = s.album_id
+		WHERE h.user_id = $1 AND $2 = ANY(h.artist_ids)
 		ORDER BY h.timestamp DESC LIMIT $3 OFFSET $4`,
 		userId, artistId, limit, offset)
 	if err != nil {
@@ -844,7 +812,8 @@ func GetHistoryForArtist(userId, artistId int, limit, offset int) ([]ScrobbleEnt
 	var entries []ScrobbleEntry
 	for rows.Next() {
 		var e ScrobbleEntry
-		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName, &e.ArtistIds)
+		err := rows.Scan(&e.Timestamp, &e.SongName, &e.AlbumName, &e.MsPlayed, &e.Platform, &e.ArtistName,
+			&e.ArtistIds, &e.CoverUrl)
 		if err != nil {
 			return nil, err
 		}
@@ -887,6 +856,7 @@ type ScrobbleEntry struct {
 	MsPlayed   int
 	Platform   string
 	ArtistIds  []int
+	CoverUrl   string
 }
 
 func MigrateHistoryEntities() error {

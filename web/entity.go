@@ -1002,73 +1002,84 @@ func refreshImage(entity string, id int) {
 	}
 }
 
+const maxImageSize = 5 * 1024 * 1024
+
+var imageTypes = map[string]string{
+	"image/jpeg": ".jpg",
+	"image/png":  ".png",
+	"image/gif":  ".gif",
+	"image/webp": ".webp",
+}
+
+// Saves the image in the request's "file" field to ./static/uploads, named by content hash,
+// and returns its public URL. The type is sniffed from the file's contents, not trusted
+// from its name. Errors are safe to show to the user.
+func saveUploadedImage(r *http.Request) (string, error) {
+	r.Body = http.MaxBytesReader(nil, r.Body, maxImageSize+64*1024)
+	if err := r.ParseMultipartForm(maxImageSize); err != nil {
+		return "", fmt.Errorf("file too large or invalid (5MB max)")
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		return "", fmt.Errorf("no file uploaded")
+	}
+	defer file.Close()
+	if header.Size > maxImageSize {
+		return "", fmt.Errorf("file exceeds 5MB limit")
+	}
+
+	sniff := make([]byte, 512)
+	n, _ := io.ReadFull(file, sniff)
+	ext, ok := imageTypes[http.DetectContentType(sniff[:n])]
+	if !ok {
+		return "", fmt.Errorf("unsupported image type; use JPEG, PNG, GIF or WebP")
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("could not read file")
+	}
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", fmt.Errorf("could not read file")
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("could not read file")
+	}
+	filename := hex.EncodeToString(hash.Sum(nil)) + ext
+
+	uploadDir := "./static/uploads"
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating upload dir: %v\n", err)
+		return "", fmt.Errorf("server error")
+	}
+	dst, err := os.Create(filepath.Join(uploadDir, filename))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating file: %v\n", err)
+		return "", fmt.Errorf("server error")
+	}
+	defer dst.Close()
+	if _, err := io.Copy(dst, file); err != nil {
+		fmt.Fprintf(os.Stderr, "Error saving file: %v\n", err)
+		return "", fmt.Errorf("server error")
+	}
+	return "/files/uploads/" + filename, nil
+}
+
 func imageUploadHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		username := getLoggedInUsername(r)
-		if username == "" {
+		if getLoggedInUsername(r) == "" {
 			http.Error(w, "Not logged in", http.StatusUnauthorized)
 			return
 		}
 
-		const maxFileSize = 5 * 1024 * 1024
-
-		err := r.ParseMultipartForm(maxFileSize)
+		imageUrl, err := saveUploadedImage(r)
 		if err != nil {
-			http.Error(w, "File too large or invalid", http.StatusBadRequest)
-			return
-		}
-
-		file, header, err := r.FormFile("file")
-		if err != nil {
-			http.Error(w, "No file uploaded", http.StatusBadRequest)
-			return
-		}
-		defer file.Close()
-
-		if header.Size > maxFileSize {
-			http.Error(w, "File exceeds 5MB limit", http.StatusBadRequest)
-			return
-		}
-
-		ext := filepath.Ext(header.Filename)
-		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
-			http.Error(w, "Invalid file type", http.StatusBadRequest)
-			return
-		}
-
-		hash := sha256.New()
-		io.Copy(hash, file)
-		file.Seek(0, 0)
-
-		hashBytes := hash.Sum(nil)
-		filename := hex.EncodeToString(hashBytes) + ext
-
-		uploadDir := "./static/uploads"
-		if err := os.MkdirAll(uploadDir, 0o755); err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating upload dir: %v\n", err)
-			http.Error(w, "Server error", http.StatusInternalServerError)
-			return
-		}
-
-		dst, err := os.Create(filepath.Join(uploadDir, filename))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating file: %v\n", err)
-			http.Error(w, "Server error", http.StatusInternalServerError)
-			return
-		}
-		defer dst.Close()
-
-		_, err = io.Copy(dst, file)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error saving file: %v\n", err)
-			http.Error(w, "Server error", http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"url": "/files/uploads/" + filename,
-		})
+		json.NewEncoder(w).Encode(map[string]string{"url": imageUrl})
 	}
 }
 

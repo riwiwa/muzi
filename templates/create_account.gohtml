@@ -1,40 +1,26 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <link rel="stylesheet" href="/files/style.css" type="text/css">
-    <title>
-      muzi | Create Account
-    </title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d0e0c">
+    <title>Create account · muzi</title>
+    {{template "head-common"}}
   </head>
-  <body>
-    <div class=login-form>
+  <body class="auth">
+    <main class="auth-card">
+      <div class="wordmark">muzi</div>
+      <p>Start a listening diary that's yours.</p>
+      {{if eq .Error "length"}}<div class="login-error">Passwords must be 8–64 characters.</div>{{end}}
+      {{if eq .Error "session"}}<div class="login-error">Unable to create a session. Please try again.</div>{{end}}
+      {{if eq .Error "userlength"}}<div class="login-error">Please choose a username.</div>{{end}}
+      {{if eq .Error "usertaken"}}<div class="login-error">That username is taken.</div>{{end}}
       <form action="/createaccountsubmit" method="POST">
-        <label for="uname">Username:</label>
-        <input type="text" id="uname" name="uname"> <br> <br>
-        <label for="pass">Password:</label>
-        <input type="password" id="pass" name="pass"> <br> <br>
-        <input type="submit" value="Create Account">
-        {{if eq .Error "length"}}
-          <div class="login-error">
-            Password must be 8-64 chars (inclusive).
-          </div>
-        {{end}}
-        {{if eq .Error "session"}}
-          <div class="login-error">
-            Unable to create session. Please try again.
-          </div>
-        {{end}}
-        {{if eq .Error "userlength"}}
-          <div class="login-error">
-            Username length must be greater than 0.
-          </div>
-        {{end}}
-        {{if eq .Error "usertaken"}}
-          <div class="login-error">
-            Username must be unique. Please try again.
-          </div>
-        {{end}}
+        <label for="uname">Username <input type="text" id="uname" name="uname" autocomplete="username" autofocus required></label>
+        <label for="pass">Password <input type="password" id="pass" name="pass" autocomplete="new-password" minlength="8" maxlength="64" required></label>
+        <input type="submit" value="Create account">
       </form>
-    </div>
+      <div class="auth-switch">Already have one? <a href="/login">Log in</a></div>
+    </main>
   </body>
 </html>

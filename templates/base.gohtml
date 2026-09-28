@@ -1,72 +1,163 @@
-{{define "base"}}
-  <!doctype html>
-  <html>
-    <head>
-      <link rel="stylesheet" href="/files/style.css" type="text/css">
-      <title>{{.Title}}</title>
-      {{block "head" .}}{{end}}
-    </head>
-    <body>
-      <!-- Hamburger Menu Button -->
-      <div class="menu-button" id="menuButton">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
+{{define "base"}}<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d0e0c">
+    <title>{{.Title}} · muzi</title>
+    {{template "head-common"}}
+    <!-- Prerender profile links on hover so navigation is instant (Chromium; ignored elsewhere) -->
+    <script type="speculationrules">
+      {"prerender": [{"where": {"href_matches": "/profile/*"}, "eagerness": "moderate"}]}
+    </script>
+  </head>
+  <body>
+    {{template "topbar" .}}
+    <main>
+      {{if eq .TemplateName "profile"}}{{template "profile" .}}{{end}}
+      {{if eq .TemplateName "settings"}}{{template "settings" .}}{{end}}
+      {{if eq .TemplateName "artist"}}{{template "artist" .}}{{end}}
+      {{if eq .TemplateName "song"}}{{template "song" .}}{{end}}
+      {{if eq .TemplateName "album"}}{{template "album" .}}{{end}}
+      {{if eq .TemplateName "scrobble"}}{{template "scrobble" .}}{{end}}
+    </main>
+    {{if .LoggedInUsername}}{{template "palette"}}{{end}}
+    <script src="/files/app.js" defer></script>
+  </body>
+</html>
+{{end}}
 
-      <!-- Search Bar -->
-      <div class="search-container">
-        <input type="text" id="globalSearch" placeholder="Search artists, songs, albums..." autocomplete="off">
-        <div id="searchResults" class="search-results"></div>
-      </div>
-  
-      <!-- Slide-out Menu -->
-      <div class="side-menu" id="sideMenu">
-        <div class="menu-header">
-          <h3>muzi</h3>
-        </div>
-        <nav class="menu-nav">
-          {{if .LoggedInUsername}}
-          <a href="/profile/{{.LoggedInUsername}}" class="menu-item">
-            <img src="/files/assets/icons/user.svg" class="menu-icon" alt="Profile">
-            <span>My Profile</span>
-          </a>
-          <a href="/logout" class="menu-item">
-            <img src="/files/assets/icons/logout.svg" class="menu-icon" alt="Logout">
-            <span>Logout</span>
-          </a>
-          {{else}}
-          <a href="/login" class="menu-item">
-            <img src="/files/assets/icons/user.svg" class="menu-icon" alt="Login">
-            <span>Login</span>
-          </a>
-          {{end}}
-          <a href="/settings" class="menu-item">
-            <img src="/files/assets/icons/settings.svg" class="menu-icon" alt="Settings">
-            <span>Settings</span>
-          </a>
-          <a href="/scrobble" class="menu-item">
-            <img src="/files/assets/icons/add.svg" class="menu-icon" alt="Scrobble">
-            <span>Manual Scrobble</span>
-          </a>
-        </nav>
-      </div>
-  
-      <!-- Overlay for closing menu -->
-      <div class="menu-overlay" id="menuOverlay"></div>
-  
-      <!-- Main Content -->
-      {{ if eq .TemplateName "profile"}}{{block "profile" .}}{{end}}{{end}}
-      {{ if eq .TemplateName "settings"}}{{block "settings" .}}{{end}}{{end}}
-      {{ if eq .TemplateName "artist"}}{{block "artist" .}}{{end}}{{end}}
-      {{ if eq .TemplateName "song"}}{{block "song" .}}{{end}}{{end}}
-      {{ if eq .TemplateName "album"}}{{block "album" .}}{{end}}{{end}}
-      {{ if eq .TemplateName "scrobble"}}{{block "scrobble" .}}{{end}}{{end}}
-  
-      <script src="/files/menu.js"></script>
-      {{if eq .TemplateName "profile"}}
-      <script src="/files/profile.js"></script>
-      {{end}}
-    </body>
-  </html>
+{{define "head-common"}}
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d0e0c'/%3E%3Ctext x='8' y='23' font-family='Georgia,serif' font-style='italic' font-size='20' fill='%23eceee6'%3Em%3C/text%3E%3Ccircle cx='25' cy='21' r='2.5' fill='%23aaffaa'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/files/style.css">
+{{end}}
+
+{{define "topbar"}}
+<header class="topbar">
+  <a class="wordmark" href="{{if .LoggedInUsername}}/profile/{{.LoggedInUsername}}{{else}}/login{{end}}">muzi</a>
+  {{if .LoggedInUsername}}
+  <button class="search-trigger" id="searchTrigger" type="button" aria-label="Search">
+    {{template "icon-search"}}<span>Search your library</span><kbd>/</kbd>
+  </button>
+  {{end}}
+  <nav class="topnav" {{if not .LoggedInUsername}}style="margin-left: auto"{{end}}>
+    {{if .LoggedInUsername}}
+    <a href="/scrobble" title="Add scrobbles" aria-label="Add scrobbles">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </a>
+    <a href="/settings" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </a>
+    <a href="/profile/{{.LoggedInUsername}}" title="Your profile" aria-label="Your profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.3-3.2 3.9-4.8 7-4.8s5.7 1.6 7 4.8"/></svg>
+    </a>
+    <a href="/logout" title="Log out" aria-label="Log out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg>
+    </a>
+    {{else}}
+    <a class="btn btn-small" style="width: auto; border-radius: 999px" href="/login">Log in</a>
+    {{end}}
+  </nav>
+</header>
+{{end}}
+
+{{define "icon-search"}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>{{end}}
+
+{{define "palette"}}
+<div class="palette" id="palette" hidden>
+  <div class="palette-box" role="dialog" aria-modal="true" aria-label="Search">
+    <label class="palette-input">
+      {{template "icon-search"}}
+      <input id="paletteInput" type="text" placeholder="Artists, songs, albums…" autocomplete="off" spellcheck="false"
+        role="combobox" aria-controls="paletteResults" aria-expanded="true">
+    </label>
+    <ul class="palette-results" id="paletteResults" role="listbox"></ul>
+    <div class="palette-hint">
+      <span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{/* Artwork or a placeholder: dict "url" "name" */}}
+{{define "art"}}{{if .url}}<img src="{{.url}}" alt="" loading="lazy" decoding="async">{{else}}<span class="art-ph" style="--h: {{hue .name}}" aria-hidden="true">{{initial .name}}</span>{{end}}{{end}}
+
+{{/* Hero artwork: dict "url" "name" "vt" (view transition name) "round" "edit" "entity" "id" "field" */}}
+{{define "hero-art"}}
+<div class="hero-art{{if .round}} round{{end}}{{if .edit}} editable-image{{end}}" style="view-transition-name: {{.vt}}"
+  {{if .edit}}data-entity="{{.entity}}" data-id="{{.id}}" data-field="{{.field}}" role="button" tabindex="0" title="Change image"{{end}}>
+  {{if .url}}<img src="{{.url}}" alt="{{.name}}" decoding="async">{{else}}<span class="art-ph" style="--h: {{hue .name}}" aria-hidden="true">{{initial .name}}</span>{{end}}
+</div>
+{{end}}
+
+{{/* Listening feed grouped by day: dict "entries" "username" "cover" (fallback art) "checks" "nowTitle" "nowArtist" */}}
+{{define "feed"}}
+{{$u := .username}}{{$cover := .cover}}{{$checks := .checks}}
+<ol class="feed">
+  {{if .nowTitle}}
+  <li class="feed-row now-playing">
+    <span class="thumb">{{template "art" (dict "url" "" "name" .nowTitle)}}</span>
+    <span class="feed-text">
+      <span class="feed-title">{{.nowTitle}}</span>
+      <span class="feed-sub">{{.nowArtist}}</span>
+    </span>
+    <span class="feed-time"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>now</span>
+  </li>
+  {{end}}
+  {{$prev := ""}}
+  {{range .entries}}
+    {{$day := dayLabel .Timestamp}}
+    {{if ne $day $prev}}<li class="feed-day">{{$day}}</li>{{$prev = $day}}{{end}}
+    <li class="feed-row">
+      {{if $checks}}<label class="feed-check"><input type="checkbox" class="scrobble-checkbox" value="{{.Id}}" aria-label="Select this scrobble"></label>{{end}}
+      <span class="thumb">{{template "art" (dict "url" (or .CoverUrl $cover) "name" (or .AlbumName .SongName))}}</span>
+      <span class="feed-text">
+        <a class="feed-title" href="/profile/{{$u}}/song/{{urlquery .ArtistName}}/{{urlquery .SongName}}">{{.SongName}}</a>
+        <span class="feed-sub">
+          {{- with getArtistNames .ArtistIds}}{{range $i, $n := .}}{{if $i}}, {{end}}<a href="/profile/{{$u}}/artist/{{urlquery $n}}">{{$n}}</a>{{end}}{{else}}{{.ArtistName}}{{end -}}
+          {{if .AlbumName}} · <a href="/profile/{{$u}}/album/{{urlquery .ArtistName}}/{{urlquery .AlbumName}}">{{.AlbumName}}</a>{{end}}
+        </span>
+      </span>
+      <time class="feed-time" title="{{formatTimestampFull .Timestamp}}">{{feedTime .Timestamp}}</time>
+    </li>
+  {{else}}
+    {{if not .nowTitle}}<li class="empty">Nothing here yet.</li>{{end}}
+  {{end}}
+</ol>
+{{end}}
+
+{{/* Period / view / size chips for a profile chart: dict "q" "prefix" "period" "view" "limit" "anchor" "views" */}}
+{{define "chart-controls"}}
+<div class="chips">
+  <div class="chip-group">
+    {{range periods}}
+    <a class="chip" aria-current="{{eq $.period .Key}}" href="{{withParams $.q (printf "%speriod" $.prefix) .Key}}#{{$.anchor}}">{{.Label}}</a>
+    {{end}}
+    <details class="range">
+      <summary class="chip" aria-current="{{eq .period "custom"}}">Custom</summary>
+      <form class="range-form" data-prefix="{{.prefix}}" data-anchor="{{.anchor}}">
+        <label>From <input type="date" name="start" required></label>
+        <label>To <input type="date" name="end"></label>
+        <button type="submit" class="btn-small">Apply</button>
+      </form>
+    </details>
+  </div>
+  {{if .views}}
+  <div class="chip-group">
+    <a class="chip" aria-current="{{eq .view "grid"}}" title="Grid" aria-label="Grid view"
+      href="{{withParams .q (printf "%sview" .prefix) "grid" (printf "%slimit" .prefix) ""}}#{{.anchor}}">
+      <svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="8" height="8" rx="1.5"/><rect x="11" y="1" width="4" height="4" rx="1"/><rect x="11" y="6" width="4" height="3" rx="1"/><rect x="1" y="11" width="4" height="4" rx="1"/><rect x="6" y="11" width="4" height="4" rx="1"/><rect x="11" y="11" width="4" height="4" rx="1"/></svg>
+    </a>
+    <a class="chip" aria-current="{{eq .view "list"}}" title="Chart" aria-label="Chart view"
+      href="{{withParams .q (printf "%sview" .prefix) "list" (printf "%slimit" .prefix) ""}}#{{.anchor}}">
+      <svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="3" rx="1"/><rect x="1" y="6.5" width="10" height="3" rx="1"/><rect x="1" y="11" width="6" height="3" rx="1"/></svg>
+    </a>
+  </div>
+  {{end}}
+  <div class="chip-group">
+    {{range limits .view}}
+    <a class="chip" aria-current="{{eq $.limit .}}" href="{{withParams $.q (printf "%slimit" $.prefix) (print .)}}#{{$.anchor}}">{{.}}</a>
+    {{end}}
+  </div>
+</div>
 {{end}}

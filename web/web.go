@@ -35,15 +35,23 @@ func init() {
 		"add":                 add,
 		"div":                 div,
 		"mod":                 mod,
-		"slice":               slice,
-		"sliceAlbum":          sliceAlbum,
-		"sliceTrack":          sliceTrack,
-		"gridReorder":         gridReorder,
 		"formatInt":           formatInt,
 		"formatTimestamp":     formatTimestamp,
 		"formatTimestampFull": formatTimestampFull,
 		"urlquery":            url.QueryEscape,
 		"getArtistNames":      GetArtistNames,
+		"pct":                 pct,
+		"dayLabel":            dayLabel,
+		"feedTime":            feedTime,
+		"withParams":          withParams,
+		"hue":                 hue,
+		"initial":             initial,
+		"artName":             artName,
+		"dict":                dict,
+		"rank":                rank,
+		"periods":             periods,
+		"limits":              limits,
+		"hourLabel":           hourLabel,
 	}
 	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("./templates/*.gohtml"))
 }
@@ -145,6 +153,8 @@ func Start() {
 	r.Get("/settings", settingsPageHandler())
 	r.Post("/settings/generate-apikey", generateAPIKeyHandler)
 	r.Post("/settings/update-spotify", updateSpotifyCredentialsHandler)
+	r.Post("/settings/update-pfp", updateProfilePictureHandler)
+	r.Post("/settings/update-bio", updateBioHandler)
 	fmt.Printf("WebUI starting on %s\n", addr)
 	prot := http.NewCrossOriginProtection()
 	http.ListenAndServe(addr, prot.Handler(r))
