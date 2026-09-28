@@ -88,7 +88,7 @@ func csrfMiddleware(next http.Handler) http.Handler {
 				Name:     csrfCookie,
 				Value:    expected,
 				Path:     "/",
-				Secure:   r.TLS != nil,
+				Secure:   secureCookies(r),
 				SameSite: http.SameSiteLaxMode,
 				MaxAge:   86400 * 30,
 			})
