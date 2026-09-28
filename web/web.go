@@ -140,6 +140,7 @@ func Start() {
 	r.Post("/createaccountsubmit", createAccount)
 	r.Post("/import/lastfm", importLastFMHandler)
 	r.Post("/import/spotify", importSpotifyHandler)
+	r.Post("/import/apple", importAppleHandler)
 	r.Get("/import/lastfm/progress", importLastFMProgressHandler)
 	r.Get("/import/spotify/progress", importSpotifyProgressHandler)
 	r.Get("/scrobble", scrobblePageHandler())

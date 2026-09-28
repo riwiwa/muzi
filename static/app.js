@@ -617,6 +617,41 @@
     });
   }
 
+  // ---------- Apple Music import (one request; the server replies with a summary) ----------
+
+  var appleForm = $('#apple-form');
+  if (appleForm) {
+    var appleStatus = $('#apple-status');
+    appleForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var button = appleForm.querySelector('button[type="submit"]');
+      button.disabled = true;
+      appleStatus.className = 'note';
+      appleStatus.style.color = '';
+      appleStatus.textContent = 'Uploading and importing…';
+      var headers = window.muziCSRF ? { 'X-CSRF-Token': window.muziCSRF() } : {};
+      fetch('/import/apple', { method: 'POST', body: new FormData(appleForm), headers: headers })
+        .then(function (res) {
+          return res.ok ? res.json() : res.text().then(function (t) { throw new Error(t); });
+        })
+        .then(function (r) {
+          var n = function (x) { return Number(x).toLocaleString(); };
+          var parts = ['Imported ' + n(r.imported) + ' play' + (r.imported === 1 ? '' : 's') + '.'];
+          if (r.already_in_muzi) parts.push(n(r.already_in_muzi) + ' were already in muzi.');
+          if (r.no_artist) parts.push(n(r.no_artist) + ' skipped because the export had no artist for them.');
+          appleStatus.className = 'note ok';
+          appleStatus.textContent = parts.join(' ');
+          appleForm.reset();
+        })
+        .catch(function (err) {
+          appleStatus.className = 'note';
+          appleStatus.style.color = 'var(--danger)';
+          appleStatus.textContent = err.message;
+        })
+        .finally(function () { button.disabled = false; });
+    });
+  }
+
   // ---------- settings tabs ----------
 
   var tabs = $$('.tab-button');

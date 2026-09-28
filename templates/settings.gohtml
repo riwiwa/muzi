@@ -126,6 +126,17 @@
         </form>
         {{template "progress" "spotify"}}
       </div>
+
+      <div class="card">
+        <h2>Apple Music</h2>
+        <p>Request your data at <a class="ok" href="https://privacy.apple.com" target="_blank" rel="noopener">privacy.apple.com</a> (choose <b>Apple Media Services information</b>), then upload the zip files Apple sends you. Extracted Apple Music Activity files work too.</p>
+        <form id="apple-form" method="POST" action="/import/apple" enctype="multipart/form-data">
+          <input type="file" name="apple_files" accept=".zip,.csv,.json" multiple required>
+          <div><button type="submit">Import from Apple Music</button></div>
+        </form>
+        <p class="note" id="apple-status" role="status" style="margin: 12px 0 0"></p>
+        <p class="note" style="margin: 8px 0 0">Plays count like on Last.fm: at least half the song or four minutes. Plays muzi already has are skipped.</p>
+      </div>
     </div>
 
     <div class="tab-panel" id="scrobble">

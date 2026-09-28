@@ -1,12 +1,12 @@
 # muzi
 
-**Self-hosted music listening statistics.** Import your history from Last.fm and Spotify, scrobble live from your players, and browse it all in a fast, lightweight web UI. It's server-rendered Go with no frontend framework.
+**Self-hosted music listening statistics.** Import your history from Last.fm, Spotify and Apple Music, scrobble live from your players, and browse it all in a fast, lightweight web UI. It's server-rendered Go with no frontend framework.
 
 ![Profile with listening stats, a year heatmap, a listening clock and top artists](docs/screenshots/profile.jpg)
 
 ## Features
 
-- **Imports:** your full history from Last.fm (via the API) and Spotify (from your data export). Re-running an import only adds what's missing.
+- **Imports:** your full history from Last.fm (via the API), Spotify and Apple Music (from their data exports). Re-running an import only adds what's missing.
 - **Live scrobbling:** Last.fm-compatible and ListenBrainz-compatible endpoints, plus Spotify playback polling. Players show up as **now playing**.
 - **Profile:** top artists, albums and tracks for any period, including custom date ranges, shown as a mosaic or a ranked chart.
 - **Rhythm:** a year-long heatmap of daily plays, a 24-hour listening clock, and listening streaks.
@@ -86,6 +86,7 @@ Under **Settings → Import**:
 
 - **Last.fm:** your Last.fm username and an [API key](https://www.last.fm/api/account/create).
 - **Spotify:** the `Streaming_History_Audio_*.json` files from your [Spotify data export](https://www.spotify.com/account/privacy/). Request the **Extended streaming history** export; the basic account-data export doesn't include full play history.
+- **Apple Music:** the zip files from [Apple's data export](https://privacy.apple.com) (request **Apple Media Services information**), or the extracted `Apple Music Activity` files. A play counts like on Last.fm: at least half the song or four minutes.
 
 ## Scrobbling
 
@@ -119,7 +120,7 @@ The credentials alone are enough for Spotify artwork; connecting is only needed 
 - Ability to import all listening statistics and scrobbles from: \[In Progress\]
     - LastFM \[Complete\]
     - Spotify \[Complete\]
-    - Apple Music \[Planned\]
+    - Apple Music \[Complete\]
 
 - WebUI \[In Progress\]
     - Full listening history with time \[Complete\]
