@@ -69,7 +69,7 @@ func gridPageHandler() http.HandlerFunc {
 			d.Kind = "artists"
 		}
 		switch p := q.Get("period"); p {
-		case "week", "month", "year", "all_time", "custom":
+		case "day", "week", "month", "year", "all_time", "custom":
 			d.Period = p
 		}
 		if n, err := strconv.Atoi(q.Get("size")); err == nil && n >= gridMinSize && n <= gridMaxSize {

@@ -285,11 +285,13 @@
     });
   });
 
-  // prefill custom ranges from the URL
+  // prefill custom ranges from the URL; older links carry bare dates, which the
+  // date-and-time pickers need a time for
   var query = new URLSearchParams(window.location.search);
   $$('.range-form').forEach(function (form) {
     ['start', 'end'].forEach(function (key) {
       var value = query.get(form.dataset.prefix + key);
+      if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) value += key === 'start' ? 'T00:00' : 'T23:59';
       if (value) form.elements[key].value = value;
     });
   });
