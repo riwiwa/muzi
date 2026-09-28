@@ -30,6 +30,8 @@ type settingsData struct {
 	ProfileURL         string
 	Timezone           string
 	TimezoneError      string
+	AccountError       string
+	AccountOK          string
 }
 
 const bioMaxLength = 500
@@ -71,6 +73,8 @@ func settingsPageHandler() http.HandlerFunc {
 			BioMaxLength:       bioMaxLength,
 			ProfileURL:         "/profile/" + username,
 			TimezoneError:      r.URL.Query().Get("tz_error"),
+			AccountError:       r.URL.Query().Get("account_error"),
+			AccountOK:          r.URL.Query().Get("account_ok"),
 		}
 
 		err = db.Pool.QueryRow(r.Context(), "SELECT public_profile FROM users WHERE pk = $1", userId).

@@ -24,8 +24,8 @@
   </section>
 
   <section class="block" id="plays">
-    <header class="block-head"><h2>Plays</h2></header>
-    {{template "feed" (dict "entries" .Times "username" .Username "cover" .Album.CoverUrl)}}
+    <header class="block-head"><h2>Plays</h2>{{if $owner}}<button class="btn btn-small" type="button" data-select-toggle>Select</button>{{end}}</header>
+    {{template "feed" (dict "entries" .Times "username" .Username "cover" .Album.CoverUrl "select" $owner)}}
     <nav class="pager">
       {{if gt .Page 1}}<a class="btn btn-small" href="/profile/{{.Username}}/album/{{urlquery .Artist.Name}}/{{urlquery .Album.Title}}?page={{sub .Page 1}}#plays">← Newer</a>{{end}}
       {{if .Times}}<a class="btn btn-small" href="/profile/{{.Username}}/album/{{urlquery .Artist.Name}}/{{urlquery .Album.Title}}?page={{add .Page 1}}#plays">Older →</a>{{end}}

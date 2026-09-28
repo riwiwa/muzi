@@ -162,6 +162,21 @@ kbd {
   transition: background 0.15s, color 0.15s;
 }
 .topnav a:hover { background: var(--bg-hover); color: var(--text); }
+/* the logout button looks like the other nav icons */
+.logout-form { display: contents; }
+.topnav .logout-form button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+.topnav .logout-form button:hover { background: var(--bg-hover); color: var(--text); }
+.topnav .logout-form button:active { transform: none; }
 .topnav svg { width: 19px; height: 19px; }
 
 /* ---------- layout ---------- */
@@ -615,8 +630,31 @@ main {
   white-space: nowrap;
 }
 .feed-check { display: none; }
-.removing .feed-check { display: block; }
-.removing .feed-row { grid-template-columns: 20px 44px minmax(0, 1fr) auto; }
+.selecting .feed-check { display: block; }
+.selecting .feed-row { grid-template-columns: 20px 44px minmax(0, 1fr) auto; }
+.selecting .feed-row:has(.scrobble-checkbox:checked) { background: var(--accent-dim); }
+
+/* selecting plays to edit or delete */
+.select-bar {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 10px 12px 10px 18px;
+  border-radius: 999px;
+  background: var(--bg-raise);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  font-size: 14px;
+}
+.select-bar[hidden] { display: none; }
+#selectCount { margin-right: 6px; color: var(--muted); white-space: nowrap; }
 .feed-check input { accent-color: var(--accent); width: 16px; height: 16px; }
 
 /* now playing */
@@ -835,6 +873,20 @@ code {
   font-size: 18px;
 }
 .crop-zoom input { flex: 1; accent-color: var(--accent); }
+
+/* destructive settings */
+.card.danger { border-color: rgba(255, 143, 128, 0.35); }
+.card.danger h2 { color: var(--danger); }
+.btn-danger-solid, button[type="submit"].btn-danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #2a0c08;
+}
+.btn-danger-solid:hover, button[type="submit"].btn-danger-solid:hover {
+  background: #ffaa9e;
+  border-color: #ffaa9e;
+  color: #2a0c08;
+}
 
 /* import progress */
 .progress-container { margin-top: 16px; }
@@ -1138,7 +1190,8 @@ code {
   .rhythm-stats .stat b { font-size: 22px; }
 
   .feed-row { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; padding: 7px 4px; }
-  .removing .feed-row { grid-template-columns: 20px 40px minmax(0, 1fr) auto; }
+  .selecting .feed-row { grid-template-columns: 20px 40px minmax(0, 1fr) auto; }
+  .select-bar { left: 12px; right: 12px; transform: none; bottom: 12px; border-radius: var(--radius); }
   .feed-day { top: 57px; }
 
   .card { padding: 18px; }
@@ -1168,7 +1221,7 @@ code {
 }
 
 @media (max-width: 360px) {
-  .topnav a { width: 32px; }
+  .topnav a, .topnav .logout-form button { width: 32px; }
   .count { font-size: 12px; }
 }
 

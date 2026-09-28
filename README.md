@@ -13,7 +13,7 @@
 - **Grid maker:** an N×N collage (1×1 up to 10×10) of your top albums or artists for any period. Save it as a PNG or copy it to your clipboard in one click.
 - **Artwork:** artist, album and track images are fetched automatically from Spotify (if you add credentials) or Deezer. Upload your own to override any of them.
 - **Search:** press `/` or `Ctrl+K` anywhere to search your library and other people's public profiles.
-- **Editing:** rename artists, albums and tracks, remove scrobbles, and add plays by hand. Multi-artist tracks are split into their artists.
+- **Editing:** rename artists, albums and tracks, add plays by hand, and select any number of plays to fix their title, artist or album, or delete them, in one go. Multi-artist tracks are split into their artists.
 - **Profile customization:** upload and crop a profile picture, write a bio, and choose whether your profile is public. Profiles are private until you share them.
 - **Mobile:** the UI works on phones as well as desktop.
 
@@ -45,6 +45,16 @@ go run main.go
 muzi creates its database and tables on first start. The web UI runs on port 1234 by default. Open http://localhost:1234 and create an account. After the first account exists, signup is closed unless you set `allow_signup = true`.
 
 muzi reads `config.toml`, `templates/` and `static/` from its working directory, so run it from the repository folder.
+
+### Resetting a password
+
+If someone is locked out, run this from the muzi folder:
+
+```sh
+muzi reset-password <username>   # or: go run main.go reset-password <username>
+```
+
+It prints a new random password and logs that user out everywhere. Users can change their own password under **Settings → Account**.
 
 ## Configuration
 
