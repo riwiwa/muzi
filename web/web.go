@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,32 +29,44 @@ func serverAddrStr() string {
 // Holds all the parsed HTML templates
 var templates *template.Template
 
-// Declares all functions for the HTML templates and parses them
-func init() {
-	funcMap := template.FuncMap{
-		"sub":                 sub,
-		"add":                 add,
-		"div":                 div,
-		"mod":                 mod,
-		"formatInt":           formatInt,
-		"formatTimestamp":     formatTimestamp,
-		"formatTimestampFull": formatTimestampFull,
-		"urlquery":            url.QueryEscape,
-		"getArtistNames":      GetArtistNames,
-		"pct":                 pct,
-		"dayLabel":            dayLabel,
-		"feedTime":            feedTime,
-		"withParams":          withParams,
-		"hue":                 hue,
-		"initial":             initial,
-		"artName":             artName,
-		"dict":                dict,
-		"rank":                rank,
-		"periods":             periods,
-		"limits":              limits,
-		"hourLabel":           hourLabel,
+// Static files (CSS, JS, images) served under /files/, apart from uploads
+var staticFiles fs.FS
+
+// Functions available in the HTML templates
+var funcMap = template.FuncMap{
+	"sub":                 sub,
+	"add":                 add,
+	"div":                 div,
+	"mod":                 mod,
+	"formatInt":           formatInt,
+	"formatTimestamp":     formatTimestamp,
+	"formatTimestampFull": formatTimestampFull,
+	"urlquery":            url.QueryEscape,
+	"getArtistNames":      GetArtistNames,
+	"pct":                 pct,
+	"dayLabel":            dayLabel,
+	"feedTime":            feedTime,
+	"withParams":          withParams,
+	"hue":                 hue,
+	"initial":             initial,
+	"artName":             artName,
+	"dict":                dict,
+	"rank":                rank,
+	"periods":             periods,
+	"limits":              limits,
+	"hourLabel":           hourLabel,
+}
+
+// Loads the page templates (*.gohtml) and static files; call before Start. main passes the
+// copies embedded in the binary, so muzi runs from any directory.
+func Init(templateFiles, static fs.FS) error {
+	t, err := template.New("").Funcs(funcMap).ParseFS(templateFiles, "*.gohtml")
+	if err != nil {
+		return err
 	}
-	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("./templates/*.gohtml"))
+	templates = t
+	staticFiles = static
+	return nil
 }
 
 // Returns T/F if a user is found in the users table
@@ -93,7 +106,10 @@ func Start() {
 	addr := config.Get().Server.Address
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(noListingFS{http.Dir("./static")})))
+	// uploads live on disk (they're written at runtime); everything else is built in
+	uploads := http.FileServer(noListingFS{http.Dir(config.Get().Storage.UploadsDir)})
+	r.Handle("/files/uploads/*", http.StripPrefix("/files/uploads", uploads))
+	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(noListingFS{http.FS(staticFiles)})))
 	r.Get("/", rootHandler())
 	r.Get("/login", loginPageHandler())
 	r.Get("/logout", logoutHandler())
