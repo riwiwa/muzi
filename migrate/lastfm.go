@@ -1,7 +1,6 @@
 package migrate
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,8 +11,6 @@ import (
 	"time"
 
 	"muzi/db"
-
-	"github.com/jackc/pgx/v5"
 )
 
 type LastFMTrack struct {
@@ -286,98 +283,13 @@ func ImportLastFM(
 	return nil
 }
 
-// Inserts a batch of plays, skipping ones already in history. COPY can't skip conflicts (one
-// already-imported play would fail the whole batch), so the batch is copied into a temp table first.
+// Inserts a batch of Last.fm plays, skipping ones already in history
 func insertBatch(tracks []LastFMTrack, totalImported *int) error {
-	if len(tracks) == 0 {
-		return nil
+	plays := make([]Play, len(tracks))
+	for i, t := range tracks {
+		plays[i] = Play{UserId: t.UserId, Timestamp: t.Timestamp, SongName: t.SongName, Artist: t.Artist, Album: t.Album}
 	}
-
-	artistIdMap, err := resolveLastFMArtistIds(tracks)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error resolving artist IDs: %v\n", err)
-		return err
-	}
-
-	rows := make([][]any, 0, len(tracks))
-	for _, t := range tracks {
-		artistNames := parseArtistString(t.Artist)
-		var artistIds []int
-		for _, name := range artistNames {
-			if ids, ok := artistIdMap[name]; ok {
-				artistIds = append(artistIds, ids...)
-			}
-		}
-
-		// NULL rather than 0, which would violate the artists foreign key
-		var primaryArtistId any
-		if len(artistIds) > 0 {
-			primaryArtistId = artistIds[0]
-		}
-
-		rows = append(rows, []any{
-			t.UserId, t.Timestamp, t.SongName, t.Artist,
-			t.Album, 0, "lastfm", primaryArtistId, artistIds,
-		})
-	}
-
-	ctx := context.Background()
-	tx, err := db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	_, err = tx.Exec(ctx,
-		`CREATE TEMP TABLE lastfm_import (
-			user_id INTEGER, timestamp TIMESTAMPTZ, song_name TEXT, artist TEXT, album_name TEXT,
-			ms_played INTEGER, platform TEXT, artist_id INTEGER, artist_ids INTEGER[]
-		) ON COMMIT DROP`)
-	if err != nil {
-		return err
-	}
-
-	columns := []string{
-		"user_id", "timestamp", "song_name", "artist", "album_name",
-		"ms_played", "platform", "artist_id", "artist_ids",
-	}
-	_, err = tx.CopyFrom(ctx, pgx.Identifier{"lastfm_import"}, columns, pgx.CopyFromRows(rows))
-	if err != nil {
-		return err
-	}
-
-	tag, err := tx.Exec(ctx,
-		`INSERT INTO history (user_id, timestamp, song_name, artist, album_name,
-			ms_played, platform, artist_id, artist_ids)
-		SELECT user_id, timestamp, song_name, artist, album_name, ms_played, platform, artist_id, artist_ids
-		FROM lastfm_import
-		ON CONFLICT (user_id, song_name, artist, timestamp) DO NOTHING`)
-	if err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return err
-	}
-	*totalImported += int(tag.RowsAffected())
-	return nil
-}
-
-func resolveLastFMArtistIds(tracks []LastFMTrack) (map[string][]int, error) {
-	artistIdMap := make(map[string][]int)
-
-	for _, t := range tracks {
-		artistNames := parseArtistString(t.Artist)
-		for _, name := range artistNames {
-			if _, exists := artistIdMap[name]; !exists {
-				artistId, _, err := db.GetOrCreateArtist(t.UserId, name)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error creating artist %s: %v\n", name, err)
-					continue
-				}
-				artistIdMap[name] = []int{artistId}
-			}
-		}
-	}
-
-	return artistIdMap, nil
+	inserted, err := insertPlays(plays, "lastfm", 0)
+	*totalImported += inserted
+	return err
 }
