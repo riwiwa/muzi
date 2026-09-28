@@ -5,7 +5,9 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /muzi .
+# release builds pass the tag, which `muzi -version` reports
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /muzi .
 
 FROM alpine:3.22
 # tzdata so TZ sets the server's local time, which days and hours in stats follow
