@@ -93,7 +93,7 @@ func Start() {
 	addr := config.Get().Server.Address
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(http.Dir("./static"))))
+	r.Handle("/files/*", http.StripPrefix("/files", http.FileServer(noListingFS{http.Dir("./static")})))
 	r.Get("/", rootHandler())
 	r.Get("/login", loginPageHandler())
 	r.Get("/logout", logoutHandler())
